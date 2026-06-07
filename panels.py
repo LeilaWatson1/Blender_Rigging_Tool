@@ -14,6 +14,7 @@ class VIEW3D_PT_rig_tool(bpy.types.Panel):
         props = context.scene.rig_tool
 
         layout.prop(props, "rig_name")
+        layout.operator("rig_tool.add_bone")
 
 def register():
     bpy.utils.register_class(VIEW3D_PT_rig_tool)
