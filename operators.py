@@ -1,5 +1,5 @@
 import bpy
-from .rig_modules import create_base_rig, create_bone
+from .rig_modules import create_base_rig, create_bone, create_revolver_template
 
 # the Python functions behind your shelf buttons
 
@@ -34,7 +34,19 @@ class RIGTOOL_OT_create_bone(bpy.types.Operator):
         return {'FINISHED'}
 
 
-classes = [RIGTOOL_OT_add_bone, RIGTOOL_OT_create_bone]
+class RIGTOOL_OT_template_revolver(bpy.types.Operator):
+    bl_idname = "rig_tool.template_revolver"
+    bl_label = "Revolver"
+    bl_description = "Contains: cylinder, cylinder latch, trigger, and safety parts"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        props = context.scene.rig_tool
+        create_revolver_template(context, props.rig_name)
+        return {'FINISHED'}
+
+
+classes = [RIGTOOL_OT_add_bone, RIGTOOL_OT_create_bone, RIGTOOL_OT_template_revolver]
 
 def register():
     for cls in classes:

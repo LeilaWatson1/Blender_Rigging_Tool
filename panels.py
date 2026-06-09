@@ -14,6 +14,15 @@ class VIEW3D_PT_rig_tool(bpy.types.Panel):
         props = context.scene.rig_tool
 
         layout.prop(props, "rig_name")
+
+        row = layout.row()
+        row.prop(props, "show_templates",
+                 icon='TRIA_DOWN' if props.show_templates else 'TRIA_RIGHT',
+                 emboss=False)
+        if props.show_templates:
+            box = layout.box()
+            box.operator("rig_tool.template_revolver")
+
         layout.operator("rig_tool.add_bone")
 
         if props.show_add_bone_ui:

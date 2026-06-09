@@ -19,6 +19,10 @@ class RigToolProperties(bpy.types.PropertyGroup):
         name="Has Control",
         default=True,
     )
+    show_templates: bpy.props.BoolProperty(
+        name="Templates",
+        default=False,
+    )
     show_add_bone_ui: bpy.props.BoolProperty(
         default=False,
     )

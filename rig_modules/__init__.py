@@ -83,7 +83,7 @@ def create_base_rig(context, rig_name):
     return def_obj, ctrl_obj
 
 
-def create_bone(context, rig_name, bone_name, is_deforming, has_control):
+def create_bone(context, rig_name, bone_name, is_deforming, has_control, parent_bone_name="root", ctrl_radius=0.5, ctrl_axis='Z'):
     def_obj, ctrl_obj = create_base_rig(context, rig_name)
     override = _get_view3d_override(context)
 
@@ -97,14 +97,15 @@ def create_bone(context, rig_name, bone_name, is_deforming, has_control):
         def_bone = def_obj.data.edit_bones.new(def_bone_name)
         def_bone.head = (0.0, 0.0, 0.0)
         def_bone.tail = (0.0, 0.1, 0.0)
-        def_bone.parent = def_obj.data.edit_bones["root"]
+        def_parent_name = parent_bone_name if parent_bone_name == "root" else f"DEF_{parent_bone_name}"
+        def_bone.parent = def_obj.data.edit_bones[def_parent_name]
         def_bone.use_connect = False
         with context.temp_override(**override):
             bpy.ops.object.mode_set(mode='OBJECT')
 
     if has_control:
         wgt_collection = bpy.data.collections.get(f"WGTS_{rig_name}")
-        circle_widget = create_circle_widget(f"WGT_{rig_name}_{bone_name}", wgt_collection, radius=0.5)
+        circle_widget = create_circle_widget(f"WGT_{rig_name}_{bone_name}", wgt_collection, radius=ctrl_radius, axis=ctrl_axis)
 
         context.view_layer.objects.active = ctrl_obj
         with context.temp_override(**override):
@@ -112,7 +113,7 @@ def create_bone(context, rig_name, bone_name, is_deforming, has_control):
         ctrl_bone = ctrl_obj.data.edit_bones.new(ctrl_bone_name)
         ctrl_bone.head = (0.0, 0.0, 0.0)
         ctrl_bone.tail = (0.0, 0.1, 0.0)
-        ctrl_bone.parent = ctrl_obj.data.edit_bones["CTRL_root"]
+        ctrl_bone.parent = ctrl_obj.data.edit_bones[f"CTRL_{parent_bone_name}"]
         ctrl_bone.use_connect = False
         with context.temp_override(**override):
             bpy.ops.object.mode_set(mode='OBJECT')
@@ -140,3 +141,13 @@ def create_bone(context, rig_name, bone_name, is_deforming, has_control):
         copy_transforms.subtarget = ctrl_bone_name
         with context.temp_override(**override):
             bpy.ops.object.mode_set(mode='OBJECT')
+
+
+def create_revolver_template(context, rig_name):
+    create_base_rig(context, rig_name)
+
+    create_bone(context, rig_name, "local",           True, True, parent_bone_name="root",           ctrl_radius=0.5,  ctrl_axis='Z')
+    create_bone(context, rig_name, "cylinder_latch",  True, True, parent_bone_name="local",          ctrl_radius=0.25, ctrl_axis='Y')
+    create_bone(context, rig_name, "trigger",         True, True, parent_bone_name="local",          ctrl_radius=0.25, ctrl_axis='Y')
+    create_bone(context, rig_name, "safety",          True, True, parent_bone_name="local",          ctrl_radius=0.25, ctrl_axis='Y')
+    create_bone(context, rig_name, "cylinder",        True, True, parent_bone_name="cylinder_latch", ctrl_radius=0.25, ctrl_axis='X')
