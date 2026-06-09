@@ -81,3 +81,62 @@ def create_base_rig(context, rig_name):
         bpy.ops.object.mode_set(mode='OBJECT')
 
     return def_obj, ctrl_obj
+
+
+def create_bone(context, rig_name, bone_name, is_deforming, has_control):
+    def_obj, ctrl_obj = create_base_rig(context, rig_name)
+    override = _get_view3d_override(context)
+
+    def_bone_name = f"DEF_{bone_name}"
+    ctrl_bone_name = f"CTRL_{bone_name}"
+
+    if is_deforming:
+        context.view_layer.objects.active = def_obj
+        with context.temp_override(**override):
+            bpy.ops.object.mode_set(mode='EDIT')
+        def_bone = def_obj.data.edit_bones.new(def_bone_name)
+        def_bone.head = (0.0, 0.0, 0.0)
+        def_bone.tail = (0.0, 0.1, 0.0)
+        def_bone.parent = def_obj.data.edit_bones["root"]
+        def_bone.use_connect = False
+        with context.temp_override(**override):
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+    if has_control:
+        wgt_collection = bpy.data.collections.get(f"WGTS_{rig_name}")
+        circle_widget = create_circle_widget(f"WGT_{rig_name}_{bone_name}", wgt_collection, radius=0.5)
+
+        context.view_layer.objects.active = ctrl_obj
+        with context.temp_override(**override):
+            bpy.ops.object.mode_set(mode='EDIT')
+        ctrl_bone = ctrl_obj.data.edit_bones.new(ctrl_bone_name)
+        ctrl_bone.head = (0.0, 0.0, 0.0)
+        ctrl_bone.tail = (0.0, 0.1, 0.0)
+        ctrl_bone.parent = ctrl_obj.data.edit_bones["CTRL_root"]
+        ctrl_bone.use_connect = False
+        with context.temp_override(**override):
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+        context.view_layer.objects.active = ctrl_obj
+        with context.temp_override(**override):
+            bpy.ops.object.mode_set(mode='POSE')
+        ctrl_pose_bone = ctrl_obj.pose.bones[ctrl_bone_name]
+        ctrl_pose_bone.custom_shape = circle_widget
+        ctrl_pose_bone.use_custom_shape_bone_size = False
+        ctrl_pose_bone.color.palette = 'CUSTOM'
+        ctrl_pose_bone.color.custom.normal = (0.8, 0.0, 0.0)
+        ctrl_pose_bone.color.custom.select = (1.0, 0.4, 0.4)
+        ctrl_pose_bone.color.custom.active = (1.0, 0.6, 0.6)
+        with context.temp_override(**override):
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+    if is_deforming and has_control:
+        context.view_layer.objects.active = def_obj
+        with context.temp_override(**override):
+            bpy.ops.object.mode_set(mode='POSE')
+        def_pose_bone = def_obj.pose.bones[def_bone_name]
+        copy_transforms = def_pose_bone.constraints.new('COPY_TRANSFORMS')
+        copy_transforms.target = ctrl_obj
+        copy_transforms.subtarget = ctrl_bone_name
+        with context.temp_override(**override):
+            bpy.ops.object.mode_set(mode='OBJECT')

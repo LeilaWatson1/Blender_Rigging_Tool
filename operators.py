@@ -1,20 +1,40 @@
 import bpy
-from .rig_modules import create_base_rig
+from .rig_modules import create_base_rig, create_bone
 
 # the Python functions behind your shelf buttons
 
 class RIGTOOL_OT_add_bone(bpy.types.Operator):
     bl_idname = "rig_tool.add_bone"
     bl_label = "Add Bone"
-    bl_description = "Add a single bone to the rig, creating the base rig if it does not exist"
+    bl_description = "Show options for adding a bone to the rig"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         props = context.scene.rig_tool
-        create_base_rig(context, props.rig_name)
+        props.show_add_bone_ui = not props.show_add_bone_ui
         return {'FINISHED'}
 
-classes = [RIGTOOL_OT_add_bone]
+
+class RIGTOOL_OT_create_bone(bpy.types.Operator):
+    bl_idname = "rig_tool.create_bone"
+    bl_label = "Create"
+    bl_description = "Create the bone with the specified settings"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        props = context.scene.rig_tool
+        create_bone(
+            context,
+            props.rig_name,
+            props.bone_name,
+            props.is_deforming,
+            props.has_control,
+        )
+        props.show_add_bone_ui = False
+        return {'FINISHED'}
+
+
+classes = [RIGTOOL_OT_add_bone, RIGTOOL_OT_create_bone]
 
 def register():
     for cls in classes:

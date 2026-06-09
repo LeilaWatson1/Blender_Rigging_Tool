@@ -16,6 +16,13 @@ class VIEW3D_PT_rig_tool(bpy.types.Panel):
         layout.prop(props, "rig_name")
         layout.operator("rig_tool.add_bone")
 
+        if props.show_add_bone_ui:
+            box = layout.box()
+            box.prop(props, "bone_name")
+            box.prop(props, "is_deforming")
+            box.prop(props, "has_control")
+            box.operator("rig_tool.create_bone")
+
 def register():
     bpy.utils.register_class(VIEW3D_PT_rig_tool)
 
