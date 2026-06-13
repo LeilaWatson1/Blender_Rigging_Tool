@@ -101,6 +101,11 @@ def update_rig_visibility(context, rig_name):
     if ctrl_obj:     ctrl_obj.hide_viewport     = in_template_mode
     if template_obj: template_obj.hide_viewport = not in_template_mode
 
+    if ctrl_obj and not in_template_mode:
+        for bone in ctrl_obj.data.bones:
+            if bone.name.startswith("HIDE_"):
+                bone.hide = True
+
 
 def pose_update(context, rig_name):
     def_obj      = bpy.data.objects.get(f"DEF_{rig_name}")
@@ -111,33 +116,45 @@ def pose_update(context, rig_name):
 
     override = _get_view3d_override(context)
 
-    bone_positions = {}
-    for bone in template_obj.data.bones:
-        if bone.name.startswith("TEMP_"):
-            bone_name = bone.name[5:]
-            bone_positions[bone_name] = (bone.head_local.copy(), bone.tail_local.copy())
-
-    if def_obj:
-        context.view_layer.objects.active = def_obj
-        with context.temp_override(**override):
-            bpy.ops.object.mode_set(mode='EDIT')
-        for bone_name, (head, tail) in bone_positions.items():
-            edit_bone = def_obj.data.edit_bones.get(f"DEF_{bone_name}")
-            if edit_bone:
-                edit_bone.head = head
-                edit_bone.tail = tail
-        with context.temp_override(**override):
-            bpy.ops.object.mode_set(mode='OBJECT')
-
+    # CTRL pass: for each template bone, find its CTRL_ or HIDE_ bone and move it
     if ctrl_obj:
         context.view_layer.objects.active = ctrl_obj
         with context.temp_override(**override):
             bpy.ops.object.mode_set(mode='EDIT')
-        for bone_name, (head, tail) in bone_positions.items():
-            edit_bone = ctrl_obj.data.edit_bones.get(f"CTRL_{bone_name}")
+        edit_bones = ctrl_obj.data.edit_bones
+        for bone in template_obj.data.bones:
+            if not bone.name.startswith("TEMP_"):
+                continue
+            bone_name = bone.name[5:]
+            target = edit_bones.get(f"CTRL_{bone_name}") or edit_bones.get(f"HIDE_{bone_name}")
+            if target:
+                target.head = bone.head_local.copy()
+                target.tail = bone.tail_local.copy()
+        with context.temp_override(**override):
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+    # DEF pass: move each DEF bone to its Copy Transforms target's world position
+    if def_obj and ctrl_obj:
+        bone_targets = {}
+        for pose_bone in def_obj.pose.bones:
+            for c in pose_bone.constraints:
+                if c.type == 'COPY_TRANSFORMS':
+                    bone_targets[pose_bone.name] = c.subtarget
+                    break
+
+        context.view_layer.objects.active = def_obj
+        with context.temp_override(**override):
+            bpy.ops.object.mode_set(mode='EDIT')
+        ctrl_data_bones = ctrl_obj.data.bones
+        def_inv = def_obj.matrix_world.inverted()
+        for def_bone_name, subtarget in bone_targets.items():
+            ctrl_bone = ctrl_data_bones.get(subtarget)
+            if not ctrl_bone:
+                continue
+            edit_bone = def_obj.data.edit_bones.get(def_bone_name)
             if edit_bone:
-                edit_bone.head = head
-                edit_bone.tail = tail
+                edit_bone.head = def_inv @ (ctrl_obj.matrix_world @ ctrl_bone.head_local)
+                edit_bone.tail = def_inv @ (ctrl_obj.matrix_world @ ctrl_bone.tail_local)
         with context.temp_override(**override):
             bpy.ops.object.mode_set(mode='OBJECT')
 
@@ -147,6 +164,11 @@ def armatures_visible(rig_name):
         obj = bpy.data.objects.get(f"{prefix}{rig_name}")
         if obj:
             obj.hide_viewport = False
+    ctrl_obj = bpy.data.objects.get(f"CTRL_{rig_name}")
+    if ctrl_obj:
+        for bone in ctrl_obj.data.bones:
+            if bone.name.startswith("HIDE_"):
+                bone.hide = False
 
 
 def add_bone(context, rig_name, bone_name, is_deforming, has_control, **kwargs):
@@ -254,6 +276,50 @@ def create_bone(context, rig_name, bone_name, is_deforming, has_control, parent_
     add_template(context, rig_name, bone_name, parent_bone=parent_bone_name, bone_head=bone_head, bone_tail=bone_tail)
 
 
+def add_cylinder(context, rig_name):
+    def_obj  = bpy.data.objects.get(f"DEF_{rig_name}")
+    ctrl_obj = bpy.data.objects.get(f"CTRL_{rig_name}")
+    override = _get_view3d_override(context)
+
+    context.view_layer.objects.active = def_obj
+    with context.temp_override(**override):
+        bpy.ops.object.mode_set(mode='POSE')
+    for constraint in def_obj.pose.bones["DEF_cylinder"].constraints:
+        if constraint.type == 'COPY_TRANSFORMS':
+            constraint.subtarget = "HIDE_follow_cylinder"
+            break
+    with context.temp_override(**override):
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+    context.view_layer.objects.active = ctrl_obj
+    with context.temp_override(**override):
+        bpy.ops.object.mode_set(mode='EDIT')
+    follow_bone = ctrl_obj.data.edit_bones.new("HIDE_follow_cylinder")
+    follow_bone.head = (0.0, 0.1, 0.2)
+    follow_bone.tail = (0.0, 0.2, 0.2)
+    follow_bone.parent = ctrl_obj.data.edit_bones["CTRL_cylinder_latch"]
+    follow_bone.use_connect = False
+    follow_bone.hide = True
+    with context.temp_override(**override):
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+    context.view_layer.objects.active = ctrl_obj
+    with context.temp_override(**override):
+        bpy.ops.object.mode_set(mode='POSE')
+    follow_pose = ctrl_obj.pose.bones["HIDE_follow_cylinder"]
+    copy_rot = follow_pose.constraints.new('COPY_ROTATION')
+    copy_rot.target = ctrl_obj
+    copy_rot.subtarget = "CTRL_cylinder"
+    copy_rot.use_x = False
+    copy_rot.use_y = True
+    copy_rot.use_z = False
+    with context.temp_override(**override):
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+    add_template(context, rig_name, "follow_cylinder", parent_bone="cylinder_latch",
+                 bone_head=(0.0, 0.1, 0.2), bone_tail=(0.0, 0.2, 0.2))
+
+
 def create_revolver_template(context, rig_name):
     def_obj, ctrl_obj, template_obj = create_base_rig(context, rig_name)
     armatures_visible(rig_name)
@@ -265,43 +331,5 @@ def create_revolver_template(context, rig_name):
     create_bone(context, rig_name, "cylinder_latch", True, True, parent_bone_name="local",          ctrl_radius=0.05, ctrl_axis='Y', bone_head=(0.0,   0.1, 0.15), bone_tail=(0.0,   0.2, 0.15), ctrl_offset=(-0.15, 0.0, 0.0), widget_type='arc_arrow', ctrl_shape_rotation=math.pi, ctrl_color=(0.0, 0.0, 0.8))
     create_bone(context, rig_name, "cylinder",       True, True, parent_bone_name="cylinder_latch", ctrl_radius=0.05, ctrl_axis='Y', bone_head=(-0.15, 0.1, 0.2),  bone_tail=(-0.15, 0.2, 0.2),                                                                                      ctrl_color=(0.0, 0.0, 0.8))
 
-    # Redirect DEF_cylinder to follow cylinder_follow instead of CTRL_cylinder
-    context.view_layer.objects.active = def_obj
-    with context.temp_override(**override):
-        bpy.ops.object.mode_set(mode='POSE')
-    for constraint in def_obj.pose.bones["DEF_cylinder"].constraints:
-        if constraint.type == 'COPY_TRANSFORMS':
-            constraint.subtarget = "cylinder_follow"
-            break
-    with context.temp_override(**override):
-        bpy.ops.object.mode_set(mode='OBJECT')
-
-    # Add cylinder_follow to CTRL armature — hidden, parented to CTRL_local
-    context.view_layer.objects.active = ctrl_obj
-    with context.temp_override(**override):
-        bpy.ops.object.mode_set(mode='EDIT')
-    follow_bone = ctrl_obj.data.edit_bones.new("cylinder_follow")
-    follow_bone.head = (0.0, 0.1, 0.2)
-    follow_bone.tail = (0.0, 0.2, 0.2)
-    follow_bone.parent = ctrl_obj.data.edit_bones["CTRL_cylinder_latch"]
-    follow_bone.use_connect = False
-    follow_bone.hide = True
-    with context.temp_override(**override):
-        bpy.ops.object.mode_set(mode='OBJECT')
-
-    # Add Copy Rotation on cylinder_follow, Y axis only, targeting CTRL_cylinder
-    context.view_layer.objects.active = ctrl_obj
-    with context.temp_override(**override):
-        bpy.ops.object.mode_set(mode='POSE')
-    follow_pose = ctrl_obj.pose.bones["cylinder_follow"]
-    copy_rot = follow_pose.constraints.new('COPY_ROTATION')
-    copy_rot.target = ctrl_obj
-    copy_rot.subtarget = "CTRL_cylinder"
-    copy_rot.use_x = False
-    copy_rot.use_y = True
-    copy_rot.use_z = False
-    with context.temp_override(**override):
-        bpy.ops.object.mode_set(mode='OBJECT')
-
-    add_template(context, rig_name, "cylinder_follow", parent_bone="cylinder_latch", bone_head=(0.0, 0.1, 0.2), bone_tail=(0.0, 0.2, 0.2))
+    add_cylinder(context, rig_name)
     update_rig_visibility(context, rig_name)
