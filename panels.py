@@ -32,6 +32,12 @@ class VIEW3D_PT_rig_tool(bpy.types.Panel):
             box.prop(props, "has_control")
             box.operator("rig_tool.create_bone")
 
+        row = layout.row(align=True)
+        op = row.operator("rig_tool.set_mode", text="Template Mode", depress=(props.mode == 'TEMPLATE'))
+        op.mode = 'TEMPLATE'
+        op = row.operator("rig_tool.set_mode", text="Pose Mode", depress=(props.mode == 'POSE'))
+        op.mode = 'POSE'
+
 def register():
     bpy.utils.register_class(VIEW3D_PT_rig_tool)
 

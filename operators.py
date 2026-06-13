@@ -1,5 +1,5 @@
 import bpy
-from .rig_modules import create_base_rig, create_bone, create_revolver_template
+from .rig_modules import create_base_rig, add_bone, create_revolver_template, update_rig_visibility, armatures_visible, pose_update
 
 # the Python functions behind your shelf buttons
 
@@ -23,7 +23,7 @@ class RIGTOOL_OT_create_bone(bpy.types.Operator):
 
     def execute(self, context):
         props = context.scene.rig_tool
-        create_bone(
+        add_bone(
             context,
             props.rig_name,
             props.bone_name,
@@ -46,7 +46,24 @@ class RIGTOOL_OT_template_revolver(bpy.types.Operator):
         return {'FINISHED'}
 
 
-classes = [RIGTOOL_OT_add_bone, RIGTOOL_OT_create_bone, RIGTOOL_OT_template_revolver]
+class RIGTOOL_OT_set_mode(bpy.types.Operator):
+    bl_idname = "rig_tool.set_mode"
+    bl_label = "Set Mode"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    mode: bpy.props.StringProperty()
+
+    def execute(self, context):
+        props = context.scene.rig_tool
+        props.mode = self.mode
+        if self.mode == 'POSE':
+            armatures_visible(props.rig_name)
+            pose_update(context, props.rig_name)
+        update_rig_visibility(context, props.rig_name)
+        return {'FINISHED'}
+
+
+classes = [RIGTOOL_OT_add_bone, RIGTOOL_OT_create_bone, RIGTOOL_OT_template_revolver, RIGTOOL_OT_set_mode]
 
 def register():
     for cls in classes:

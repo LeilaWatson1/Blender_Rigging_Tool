@@ -26,6 +26,14 @@ class RigToolProperties(bpy.types.PropertyGroup):
     show_add_bone_ui: bpy.props.BoolProperty(
         default=False,
     )
+    mode: bpy.props.EnumProperty(
+        name="Mode",
+        items=[
+            ('TEMPLATE', "Template Mode", ""),
+            ('POSE', "Pose Mode", ""),
+        ],
+        default='TEMPLATE',
+    )
 
 def register():
     bpy.utils.register_class(RigToolProperties)

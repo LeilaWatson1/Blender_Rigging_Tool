@@ -1,6 +1,6 @@
 import bpy
 import math
-from .widgets import create_ctrl_widget, create_arc_arrow_widget, create_circle_arrow_widget
+from .widgets import create_circle_widget, create_arc_arrow_widget, create_circle_arrow_widget
 
 
 def _get_view3d_override(context):
@@ -18,6 +18,7 @@ def create_base_rig(context, rig_name):
         return (
             bpy.data.objects.get(f"DEF_{rig_name}"),
             bpy.data.objects.get(f"CTRL_{rig_name}"),
+            bpy.data.objects.get(f"TEMPLATE_{rig_name}"),
         )
 
     override = _get_view3d_override(context)
@@ -37,6 +38,10 @@ def create_base_rig(context, rig_name):
     ctrl_armature = bpy.data.armatures.new(f"CTRL_{rig_name}")
     ctrl_obj = bpy.data.objects.new(f"CTRL_{rig_name}", ctrl_armature)
     rig_collection.objects.link(ctrl_obj)
+
+    template_armature = bpy.data.armatures.new(f"TEMPLATE_{rig_name}")
+    template_obj = bpy.data.objects.new(f"TEMPLATE_{rig_name}", template_armature)
+    rig_collection.objects.link(template_obj)
 
     context.view_layer.objects.active = def_obj
     with context.temp_override(**override):
@@ -81,11 +86,109 @@ def create_base_rig(context, rig_name):
     with context.temp_override(**override):
         bpy.ops.object.mode_set(mode='OBJECT')
 
-    return def_obj, ctrl_obj
+    return def_obj, ctrl_obj, template_obj
+
+
+def update_rig_visibility(context, rig_name):
+    mode         = context.scene.rig_tool.mode
+    def_obj      = bpy.data.objects.get(f"DEF_{rig_name}")
+    ctrl_obj     = bpy.data.objects.get(f"CTRL_{rig_name}")
+    template_obj = bpy.data.objects.get(f"TEMPLATE_{rig_name}")
+
+    in_template_mode = (mode == 'TEMPLATE')
+
+    if def_obj:      def_obj.hide_viewport      = in_template_mode
+    if ctrl_obj:     ctrl_obj.hide_viewport     = in_template_mode
+    if template_obj: template_obj.hide_viewport = not in_template_mode
+
+
+def pose_update(context, rig_name):
+    def_obj      = bpy.data.objects.get(f"DEF_{rig_name}")
+    ctrl_obj     = bpy.data.objects.get(f"CTRL_{rig_name}")
+    template_obj = bpy.data.objects.get(f"TEMPLATE_{rig_name}")
+    if not template_obj:
+        return
+
+    override = _get_view3d_override(context)
+
+    bone_positions = {}
+    for bone in template_obj.data.bones:
+        if bone.name.startswith("TEMP_"):
+            bone_name = bone.name[5:]
+            bone_positions[bone_name] = (bone.head_local.copy(), bone.tail_local.copy())
+
+    if def_obj:
+        context.view_layer.objects.active = def_obj
+        with context.temp_override(**override):
+            bpy.ops.object.mode_set(mode='EDIT')
+        for bone_name, (head, tail) in bone_positions.items():
+            edit_bone = def_obj.data.edit_bones.get(f"DEF_{bone_name}")
+            if edit_bone:
+                edit_bone.head = head
+                edit_bone.tail = tail
+        with context.temp_override(**override):
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+    if ctrl_obj:
+        context.view_layer.objects.active = ctrl_obj
+        with context.temp_override(**override):
+            bpy.ops.object.mode_set(mode='EDIT')
+        for bone_name, (head, tail) in bone_positions.items():
+            edit_bone = ctrl_obj.data.edit_bones.get(f"CTRL_{bone_name}")
+            if edit_bone:
+                edit_bone.head = head
+                edit_bone.tail = tail
+        with context.temp_override(**override):
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+
+def armatures_visible(rig_name):
+    for prefix in ("DEF_", "CTRL_", "TEMPLATE_"):
+        obj = bpy.data.objects.get(f"{prefix}{rig_name}")
+        if obj:
+            obj.hide_viewport = False
+
+
+def add_bone(context, rig_name, bone_name, is_deforming, has_control, **kwargs):
+    armatures_visible(rig_name)
+    create_bone(context, rig_name, bone_name, is_deforming, has_control, **kwargs)
+    update_rig_visibility(context, rig_name)
+
+
+def add_template(context, rig_name, bone_name, parent_bone=None, child_bone=None, bone_head=(0.0, 0.0, 0.0), bone_tail=(0.0, 0.1, 0.0)):
+    template_obj = bpy.data.objects.get(f"TEMPLATE_{rig_name}")
+    if not template_obj:
+        return
+
+    override = _get_view3d_override(context)
+    TEMP_bone_name = f"TEMP_{bone_name}"
+
+    context.view_layer.objects.active = template_obj
+    with context.temp_override(**override):
+        bpy.ops.object.mode_set(mode='EDIT')
+
+    edit_bones = template_obj.data.edit_bones
+    new_bone = edit_bones.new(TEMP_bone_name)
+    new_bone.head = bone_head
+    new_bone.tail = bone_tail
+    new_bone.use_connect = False
+
+    if parent_bone:
+        parent_TEMP_name = f"TEMP_{parent_bone}"
+        if parent_TEMP_name in edit_bones:
+            new_bone.parent = edit_bones[parent_TEMP_name]
+
+    if child_bone:
+        child_TEMP_name = f"TEMP_{child_bone}"
+        if child_TEMP_name in edit_bones:
+            edit_bones[child_TEMP_name].parent = new_bone
+
+    with context.temp_override(**override):
+        bpy.ops.object.mode_set(mode='OBJECT')
 
 
 def create_bone(context, rig_name, bone_name, is_deforming, has_control, parent_bone_name="root", ctrl_radius=0.5, ctrl_axis='Z', bone_head=(0.0, 0.0, 0.0), bone_tail=(0.0, 0.1, 0.0), ctrl_offset=(0.0, 0.0, 0.0), widget_type='circle', ctrl_shape_rotation=0.0, ctrl_color=(0.8, 0.0, 0.0)):
-    def_obj, ctrl_obj = create_base_rig(context, rig_name)
+    def_obj, ctrl_obj, template_obj = create_base_rig(context, rig_name)
     override = _get_view3d_override(context)
 
     def_bone_name = f"DEF_{bone_name}"
@@ -111,7 +214,7 @@ def create_bone(context, rig_name, bone_name, is_deforming, has_control, parent_
         elif widget_type == 'circle_arrow':
             ctrl_widget = create_circle_arrow_widget(f"WGT_{rig_name}_{bone_name}", wgt_collection, radius=ctrl_radius, axis=ctrl_axis, offset=ctrl_offset, shape_rotation=ctrl_shape_rotation)
         else:
-            ctrl_widget = create_ctrl_widget(f"WGT_{rig_name}_{bone_name}", wgt_collection, radius=ctrl_radius, axis=ctrl_axis, offset=ctrl_offset, shape_rotation=ctrl_shape_rotation)
+            ctrl_widget = create_circle_widget(f"WGT_{rig_name}_{bone_name}", wgt_collection, radius=ctrl_radius, axis=ctrl_axis, offset=ctrl_offset, shape_rotation=ctrl_shape_rotation)
 
         context.view_layer.objects.active = ctrl_obj
         with context.temp_override(**override):
@@ -148,9 +251,12 @@ def create_bone(context, rig_name, bone_name, is_deforming, has_control, parent_
         with context.temp_override(**override):
             bpy.ops.object.mode_set(mode='OBJECT')
 
+    add_template(context, rig_name, bone_name, parent_bone=parent_bone_name, bone_head=bone_head, bone_tail=bone_tail)
+
 
 def create_revolver_template(context, rig_name):
-    def_obj, ctrl_obj = create_base_rig(context, rig_name)
+    def_obj, ctrl_obj, template_obj = create_base_rig(context, rig_name)
+    armatures_visible(rig_name)
     override = _get_view3d_override(context)
 
     create_bone(context, rig_name, "local",          True, True, parent_bone_name="root",           ctrl_radius=0.5,  ctrl_axis='Z', bone_head=(0.0,   0.0, 0.0),  bone_tail=(0.0,   0.1, 0.0),  widget_type='circle_arrow')
@@ -196,3 +302,6 @@ def create_revolver_template(context, rig_name):
     copy_rot.use_z = False
     with context.temp_override(**override):
         bpy.ops.object.mode_set(mode='OBJECT')
+
+    add_template(context, rig_name, "cylinder_follow", parent_bone="cylinder_latch", bone_head=(0.0, 0.1, 0.2), bone_tail=(0.0, 0.2, 0.2))
+    update_rig_visibility(context, rig_name)
