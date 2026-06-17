@@ -1,5 +1,5 @@
 import bpy
-from .rig_modules import create_base_rig, add_bone, create_revolver_template, update_rig_visibility, armatures_visible, pose_update, _get_view3d_override
+from .rig_modules import create_base_rig, add_bone, create_revolver_template, create_cylinder_part, update_rig_visibility, armatures_visible, pose_update, _get_view3d_override
 
 # the Python functions behind your shelf buttons
 
@@ -138,6 +138,18 @@ class RIGTOOL_OT_template_revolver(bpy.types.Operator):
         return {'FINISHED'}
 
 
+class RIGTOOL_OT_add_cylinder_part(bpy.types.Operator):
+    bl_idname = "rig_tool.add_cylinder_part"
+    bl_label = "Cylinder"
+    bl_description = "Add a cylinder part with latch and rotation follow"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        props = context.scene.rig_tool
+        create_cylinder_part(context, props.rig_name)
+        return {'FINISHED'}
+
+
 class RIGTOOL_OT_set_mode(bpy.types.Operator):
     bl_idname = "rig_tool.set_mode"
     bl_label = "Set Mode"
@@ -228,6 +240,7 @@ classes = [
     RIGTOOL_OT_add_bone,
     RIGTOOL_OT_create_bone,
     RIGTOOL_OT_template_revolver,
+    RIGTOOL_OT_add_cylinder_part,
     RIGTOOL_OT_set_mode,
     RIGTOOL_OT_move_part,
     RIGTOOL_OT_set_parent,

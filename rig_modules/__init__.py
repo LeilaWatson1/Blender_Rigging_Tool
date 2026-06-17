@@ -8,7 +8,7 @@ from .build import (
     update_rig_visibility,
     _get_view3d_override,
 )
-from .part_templates import add_cylinder
+from .part_templates import create_cylinder_part
 from .templates import create_revolver_template
 
 

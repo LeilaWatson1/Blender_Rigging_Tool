@@ -49,14 +49,20 @@ class VIEW3D_PT_rig_tool(bpy.types.Panel):
             box = layout.box()
             box.operator("rig_tool.template_revolver")
 
-        layout.operator("rig_tool.add_bone")
-
-        if props.show_add_bone_ui:
+        row = layout.row()
+        row.prop(props, "show_parts",
+                 icon='TRIA_DOWN' if props.show_parts else 'TRIA_RIGHT',
+                 emboss=False)
+        if props.show_parts:
             box = layout.box()
-            box.prop(props, "bone_name")
-            box.prop(props, "is_deforming")
-            box.prop(props, "has_control")
-            box.operator("rig_tool.create_bone")
+            box.operator("rig_tool.add_bone", text="Single Bone")
+            if props.show_add_bone_ui:
+                inner = box.box()
+                inner.prop(props, "bone_name")
+                inner.prop(props, "is_deforming")
+                inner.prop(props, "has_control")
+                inner.operator("rig_tool.create_bone")
+            box.operator("rig_tool.add_cylinder_part")
 
         row = layout.row(align=True)
         op = row.operator("rig_tool.set_mode", text="Template Mode", depress=(props.mode == 'TEMPLATE'))

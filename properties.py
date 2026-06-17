@@ -46,6 +46,7 @@ class RigToolProperties(bpy.types.PropertyGroup):
         ],
         default='TEMPLATE',
     )
+    show_parts:        bpy.props.BoolProperty(name="Parts", default=False)
     parts:             bpy.props.CollectionProperty(type=RigPartItem)
     active_part_index: bpy.props.IntProperty(default=0, update=_on_part_selected)
     show_parts_list:   bpy.props.BoolProperty(name="Parts List", default=True)

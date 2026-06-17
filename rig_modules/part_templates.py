@@ -1,10 +1,26 @@
 import bpy
-from .build import _get_view3d_override, add_template
+import math
+from .build import _get_view3d_override, add_template, create_base_rig, create_bone, armatures_visible, update_rig_visibility
 
 
-# Sets up the HIDE_follow_cylinder bone in the CTRL armature, which drives DEF_cylinder's rotation
-# via a Copy Rotation constraint, allowing the cylinder to spin independently of its latch movement.
-def add_cylinder(context, rig_name):
+# Creates cylinder_latch and cylinder bones, sets up HIDE_follow_cylinder in the CTRL armature
+# to drive DEF_cylinder's rotation independently of its latch movement.
+# parent_bone_name controls where cylinder_latch is parented (use "local" when called from a template).
+def create_cylinder_part(context, rig_name, parent_bone_name="root"):
+    create_base_rig(context, rig_name)
+    armatures_visible(rig_name)
+
+    create_bone(context, rig_name, "cylinder_latch", True, True,
+                parent_bone_name=parent_bone_name, ctrl_radius=0.05, ctrl_axis='Y',
+                bone_head=(0.0, 0.1, 0.15), bone_tail=(0.0, 0.2, 0.15),
+                ctrl_offset=(-0.15, 0.0, 0.0), widget_type='arc_arrow',
+                ctrl_shape_rotation=math.pi, ctrl_color=(0.0, 0.0, 0.8))
+
+    create_bone(context, rig_name, "cylinder", True, True,
+                parent_bone_name="cylinder_latch", ctrl_radius=0.05, ctrl_axis='Y',
+                bone_head=(-0.15, 0.1, 0.2), bone_tail=(-0.15, 0.2, 0.2),
+                ctrl_color=(0.0, 0.0, 0.8))
+
     def_obj  = bpy.data.objects.get(f"DEF_{rig_name}")
     ctrl_obj = bpy.data.objects.get(f"CTRL_{rig_name}")
     override = _get_view3d_override(context)
@@ -46,3 +62,5 @@ def add_cylinder(context, rig_name):
 
     add_template(context, rig_name, "follow_cylinder", parent_bone="cylinder_latch",
                  bone_head=(0.0, 0.1, 0.2), bone_tail=(0.0, 0.2, 0.2))
+
+    update_rig_visibility(context, rig_name)
