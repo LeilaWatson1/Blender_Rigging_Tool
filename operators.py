@@ -4,6 +4,7 @@ from .rig_modules import create_base_rig, add_bone, create_revolver_template, cr
 # the Python functions behind your shelf buttons
 
 
+# Recomputes each part's indent depth from its parent, running multiple passes until no values change.
 def _recalculate_indents(props):
     changed = True
     while changed:
@@ -17,6 +18,7 @@ def _recalculate_indents(props):
                 changed = True
 
 
+# Reorders the parts list so every parent appears before its children, using a depth-first traversal.
 def _sort_parts_by_hierarchy(props):
     children = {part.name: [] for part in props.parts}
     roots = []
@@ -39,6 +41,7 @@ def _sort_parts_by_hierarchy(props):
         props.parts.move(current_idx, target_idx)
 
 
+# Reparents the DEF_, CTRL_, and TEMP_ bones for a part across all three armatures.
 def _reparent_bones(context, bone_name, rig_name, new_parent):
     override = _get_view3d_override(context)
     armatures_visible(rig_name)
@@ -82,6 +85,7 @@ def _reparent_bones(context, bone_name, rig_name, new_parent):
     update_rig_visibility(context, rig_name)
 
 
+# Updates a part's parent, recalculates indents, sorts the list by hierarchy, and reparents bones.
 def _set_parent(context, item, rig_name, new_parent):
     bone_name = item.name
     item.parent_name = new_parent
@@ -95,6 +99,7 @@ def _set_parent(context, item, rig_name, new_parent):
     _reparent_bones(context, bone_name, rig_name, new_parent)
 
 
+# Toggles the Single Bone UI panel open or closed.
 class RIGTOOL_OT_add_bone(bpy.types.Operator):
     bl_idname = "rig_tool.add_bone"
     bl_label = "Add Bone"
@@ -107,6 +112,7 @@ class RIGTOOL_OT_add_bone(bpy.types.Operator):
         return {'FINISHED'}
 
 
+# Creates a single DEF/CTRL bone pair with the settings entered in the Single Bone panel.
 class RIGTOOL_OT_create_bone(bpy.types.Operator):
     bl_idname = "rig_tool.create_bone"
     bl_label = "Create"
@@ -126,6 +132,7 @@ class RIGTOOL_OT_create_bone(bpy.types.Operator):
         return {'FINISHED'}
 
 
+# Creates all bones for the revolver template.
 class RIGTOOL_OT_template_revolver(bpy.types.Operator):
     bl_idname = "rig_tool.template_revolver"
     bl_label = "Revolver"
@@ -138,6 +145,7 @@ class RIGTOOL_OT_template_revolver(bpy.types.Operator):
         return {'FINISHED'}
 
 
+# Adds a standalone cylinder part (cylinder_latch + cylinder + follow setup) to the current rig.
 class RIGTOOL_OT_add_cylinder_part(bpy.types.Operator):
     bl_idname = "rig_tool.add_cylinder_part"
     bl_label = "Cylinder"
@@ -150,6 +158,7 @@ class RIGTOOL_OT_add_cylinder_part(bpy.types.Operator):
         return {'FINISHED'}
 
 
+# Switches between Template Mode and Pose Mode, updating armature visibility and applying template positions.
 class RIGTOOL_OT_set_mode(bpy.types.Operator):
     bl_idname = "rig_tool.set_mode"
     bl_label = "Set Mode"
@@ -167,6 +176,7 @@ class RIGTOOL_OT_set_mode(bpy.types.Operator):
         return {'FINISHED'}
 
 
+# Moves the selected part up or down in the list and updates its parent to match its new position.
 class RIGTOOL_OT_move_part(bpy.types.Operator):
     bl_idname = "rig_tool.move_part"
     bl_label = "Move Part"
@@ -203,6 +213,7 @@ class RIGTOOL_OT_move_part(bpy.types.Operator):
         return {'FINISHED'}
 
 
+# Sets the parent of the selected part to the value chosen in the Parent search field.
 class RIGTOOL_OT_set_parent(bpy.types.Operator):
     bl_idname = "rig_tool.set_parent"
     bl_label = "Set Parent"
@@ -220,6 +231,7 @@ class RIGTOOL_OT_set_parent(bpy.types.Operator):
         return {'FINISHED'}
 
 
+# Parents the selected part directly to root, removing it from any sub-hierarchy.
 class RIGTOOL_OT_parent_to_root(bpy.types.Operator):
     bl_idname = "rig_tool.parent_to_root"
     bl_label = "To Root"

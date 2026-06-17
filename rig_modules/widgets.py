@@ -3,11 +3,13 @@ import bmesh
 import math
 
 
+# Rotates a 2D point (x, y) by angle radians around the origin.
 def _rotate_2d(x, y, angle):
     c, s = math.cos(angle), math.sin(angle)
     return (c * x - s * y, s * x + c * y)
 
 
+# Maps a flat (x, y) coordinate onto a 3D axis plane (X, Y, or Z) and applies an offset.
 def _apply_axis(x, y, axis, offset):
     ox, oy, oz = offset
     if axis == 'X':
@@ -18,6 +20,7 @@ def _apply_axis(x, y, axis, offset):
         return (x + ox, y + oy, oz)
 
 
+# Creates a wire circle mesh object in the given collection, used as a bone custom shape.
 def create_circle_widget(name, collection, radius=1.0, vertices=32, axis='Z', offset=(0.0, 0.0, 0.0), shape_rotation=0.0):
     mesh = bpy.data.meshes.new(name)
     bm = bmesh.new()
@@ -41,6 +44,7 @@ def create_circle_widget(name, collection, radius=1.0, vertices=32, axis='Z', of
     return obj
 
 
+# Creates a wire arc with arrowheads at both ends, used as a bone custom shape for single-axis rotation controls.
 def create_arc_arrow_widget(name, collection, radius=1.0, axis='Z', offset=(0.0, 0.0, 0.0), shape_rotation=0.0):
     mesh = bpy.data.meshes.new(name)
     bm = bmesh.new()
@@ -95,6 +99,7 @@ def create_arc_arrow_widget(name, collection, radius=1.0, axis='Z', offset=(0.0,
     return obj
 
 
+# Creates a wire circle with four outward arrows, used as a bone custom shape for multi-directional controls like root.
 def create_circle_arrow_widget(name, collection, radius=1.0, axis='Z', offset=(0.0, 0.0, 0.0), shape_rotation=0.0):
     mesh = bpy.data.meshes.new(name)
     bm = bmesh.new()
