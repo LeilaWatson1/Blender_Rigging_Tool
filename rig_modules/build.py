@@ -14,18 +14,31 @@ def _unique_part_name(props, name):
     return f"{name}_{i:03d}"
 
 
-# Appends a new entry to the parts list in the UI, computing indent depth from the parent.
+# Appends a new entry to the parts list in the UI and moves it to sit directly under its parent.
 def _add_part(context, part_name, parent_name=""):
     props = context.scene.rig_tool
-    indent = 0
-    for part in props.parts:
+    indent     = 0
+    parent_idx = None
+    for i, part in enumerate(props.parts):
         if part.name == parent_name:
-            indent = part.indent + 1
+            indent     = part.indent + 1
+            parent_idx = i
             break
     item = props.parts.add()
     item.name        = part_name
     item.parent_name = parent_name
     item.indent      = indent
+
+    if parent_idx is not None:
+        new_idx    = len(props.parts) - 1
+        insert_idx = parent_idx + 1
+        for i in range(parent_idx + 1, new_idx):
+            if props.parts[i].indent > props.parts[parent_idx].indent:
+                insert_idx = i + 1
+            else:
+                break
+        if insert_idx < new_idx:
+            props.parts.move(new_idx, insert_idx)
 
 
 # Returns a context override dict for the active VIEW_3D window, required by bpy.ops calls from the N-panel.

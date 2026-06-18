@@ -6,18 +6,19 @@ from .build import _get_view3d_override, add_template, create_base_rig, create_b
 # Creates cylinder_latch and cylinder bones, sets up a HIDE_follow bone in the CTRL armature
 # to drive the cylinder's rotation independently of its latch movement.
 # parent_bone_name controls where cylinder_latch is parented (use "local" when called from a template).
-# Returns the actual cylinder part name used, which may differ from "cylinder" if duplicates exist.
-def create_cylinder_part(context, rig_name, parent_bone_name="root"):
+# base_name sets the root name for both bones: base_name_latch and base_name.
+# Returns the actual cylinder part name used, which may differ from base_name if duplicates exist.
+def create_cylinder_part(context, rig_name, parent_bone_name="root", base_name="cylinder"):
     create_base_rig(context, rig_name)
     armatures_visible(rig_name)
 
-    latch_name = create_bone(context, rig_name, "cylinder_latch", True, True,
+    latch_name = create_bone(context, rig_name, f"{base_name}_latch", True, True,
                              parent_bone_name=parent_bone_name, ctrl_radius=0.05, ctrl_axis='Y',
                              bone_head=(0.0, 0.1, 0.15), bone_tail=(0.0, 0.2, 0.15),
                              ctrl_offset=(-0.15, 0.0, 0.0), widget_type='arc_arrow',
                              ctrl_shape_rotation=math.pi, ctrl_color=(0.0, 0.0, 0.8))
 
-    cyl_name = create_bone(context, rig_name, "cylinder", True, True,
+    cyl_name = create_bone(context, rig_name, base_name, True, True,
                            parent_bone_name=latch_name, ctrl_radius=0.05, ctrl_axis='Y',
                            bone_head=(-0.15, 0.1, 0.2), bone_tail=(-0.15, 0.2, 0.2),
                            ctrl_color=(0.0, 0.0, 0.8))

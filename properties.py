@@ -42,6 +42,13 @@ class RigToolProperties(bpy.types.PropertyGroup):
     show_add_bone_ui: bpy.props.BoolProperty(
         default=False,
     )
+    show_add_cylinder_ui: bpy.props.BoolProperty(
+        default=False,
+    )
+    cylinder_name: bpy.props.StringProperty(
+        name="Name",
+        default="cylinder",
+    )
     mode: bpy.props.EnumProperty(
         name="Mode",
         items=[
@@ -55,6 +62,7 @@ class RigToolProperties(bpy.types.PropertyGroup):
     active_part_index: bpy.props.IntProperty(default=0, update=_on_part_selected)
     show_parts_list:   bpy.props.BoolProperty(name="Parts List", default=True)
     parent_selector:   bpy.props.StringProperty(name="Parent")
+    rename_input:      bpy.props.StringProperty(name="")
 
 def register():
     bpy.utils.register_class(RigPartItem)

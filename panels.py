@@ -44,6 +44,9 @@ class VIEW3D_PT_rig_tool(bpy.types.Panel):
                 row = box.row(align=True)
                 row.operator("rig_tool.set_parent")
                 row.operator("rig_tool.parent_to_root")
+                row = box.row(align=True)
+                row.prop(props, "rename_input", text="")
+                row.operator("rig_tool.rename_part")
 
         row = layout.row()
         row.prop(props, "show_templates",
@@ -62,11 +65,19 @@ class VIEW3D_PT_rig_tool(bpy.types.Panel):
             box.operator("rig_tool.add_bone", text="Single Bone")
             if props.show_add_bone_ui:
                 inner = box.box()
-                inner.prop(props, "bone_name")
+                split = inner.split(factor=0.50)
+                split.label(text="Bone Name")
+                split.prop(props, "bone_name", text="")
                 inner.prop(props, "is_deforming")
                 inner.prop(props, "has_control")
                 inner.operator("rig_tool.create_bone")
-            box.operator("rig_tool.add_cylinder_part")
+            box.operator("rig_tool.add_cylinder_part", text="Cylinder")
+            if props.show_add_cylinder_ui:
+                inner = box.box()
+                split = inner.split(factor=0.50)
+                split.label(text="Name")
+                split.prop(props, "cylinder_name", text="")
+                inner.operator("rig_tool.create_cylinder_part")
 
         row = layout.row(align=True)
         op = row.operator("rig_tool.set_mode", text="Template Mode", depress=(props.mode == 'TEMPLATE'))

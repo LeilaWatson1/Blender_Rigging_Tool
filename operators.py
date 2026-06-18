@@ -1,5 +1,5 @@
 import bpy
-from .rig_modules import create_base_rig, add_bone, create_revolver_template, create_cylinder_part, update_rig_visibility, armatures_visible, pose_update, _get_view3d_override
+from .rig_modules import create_base_rig, add_bone, create_revolver_template, create_cylinder_part, update_rig_visibility, armatures_visible, pose_update, _get_view3d_override, _unique_part_name
 
 # the Python functions behind your shelf buttons
 
@@ -120,13 +120,15 @@ class RIGTOOL_OT_create_bone(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
-        props = context.scene.rig_tool
+        props  = context.scene.rig_tool
+        parent = props.parts[props.active_part_index].name if props.parts and props.active_part_index < len(props.parts) else "root"
         add_bone(
             context,
             props.rig_name,
             props.bone_name,
             props.is_deforming,
             props.has_control,
+            parent_bone_name=parent,
         )
         props.show_add_bone_ui = False
         return {'FINISHED'}
@@ -145,16 +147,31 @@ class RIGTOOL_OT_template_revolver(bpy.types.Operator):
         return {'FINISHED'}
 
 
-# Adds a standalone cylinder part (cylinder_latch + cylinder + follow setup) to the current rig.
+# Toggles the Cylinder UI panel open or closed.
 class RIGTOOL_OT_add_cylinder_part(bpy.types.Operator):
     bl_idname = "rig_tool.add_cylinder_part"
     bl_label = "Cylinder"
-    bl_description = "Add a cylinder part with latch and rotation follow"
+    bl_description = "Show options for adding a cylinder part to the rig"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         props = context.scene.rig_tool
-        create_cylinder_part(context, props.rig_name)
+        props.show_add_cylinder_ui = not props.show_add_cylinder_ui
+        return {'FINISHED'}
+
+
+# Creates a cylinder part using the name entered in the Cylinder panel.
+class RIGTOOL_OT_create_cylinder_part(bpy.types.Operator):
+    bl_idname = "rig_tool.create_cylinder_part"
+    bl_label = "Create"
+    bl_description = "Create the cylinder part with the specified name"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        props  = context.scene.rig_tool
+        parent = props.parts[props.active_part_index].name if props.parts and props.active_part_index < len(props.parts) else "root"
+        create_cylinder_part(context, props.rig_name, parent_bone_name=parent, base_name=props.cylinder_name)
+        props.show_add_cylinder_ui = False
         return {'FINISHED'}
 
 
@@ -250,6 +267,86 @@ class RIGTOOL_OT_set_parent(bpy.types.Operator):
         return {'FINISHED'}
 
 
+# Renames the selected part in the parts list and across all three armatures.
+class RIGTOOL_OT_rename_part(bpy.types.Operator):
+    bl_idname = "rig_tool.rename_part"
+    bl_label = "Rename"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        props = context.scene.rig_tool
+        if not props.parts or props.active_part_index >= len(props.parts):
+            return {'CANCELLED'}
+
+        new_name = props.rename_input.strip()
+        if not new_name:
+            return {'CANCELLED'}
+
+        item     = props.parts[props.active_part_index]
+        old_name = item.name
+
+        if old_name == new_name:
+            return {'CANCELLED'}
+
+        new_name = _unique_part_name(props, new_name)
+        rig_name = props.rig_name
+        override = _get_view3d_override(context)
+        armatures_visible(rig_name)
+
+        def_obj      = bpy.data.objects.get(f"DEF_{rig_name}")
+        ctrl_obj     = bpy.data.objects.get(f"CTRL_{rig_name}")
+        template_obj = bpy.data.objects.get(f"TEMPLATE_{rig_name}")
+
+        if def_obj:
+            context.view_layer.objects.active = def_obj
+            with context.temp_override(**override):
+                bpy.ops.object.mode_set(mode='EDIT')
+            bone = def_obj.data.edit_bones.get(f"DEF_{old_name}")
+            if bone:
+                bone.name = f"DEF_{new_name}"
+            with context.temp_override(**override):
+                bpy.ops.object.mode_set(mode='OBJECT')
+
+        if ctrl_obj:
+            context.view_layer.objects.active = ctrl_obj
+            with context.temp_override(**override):
+                bpy.ops.object.mode_set(mode='EDIT')
+            edit_bones = ctrl_obj.data.edit_bones
+            ctrl_bone = edit_bones.get(f"CTRL_{old_name}")
+            if ctrl_bone:
+                ctrl_bone.name = f"CTRL_{new_name}"
+            hide_bone = edit_bones.get(f"HIDE_follow_{old_name}")
+            if hide_bone:
+                hide_bone.name = f"HIDE_follow_{new_name}"
+            with context.temp_override(**override):
+                bpy.ops.object.mode_set(mode='OBJECT')
+            pose_bone = ctrl_obj.pose.bones.get(f"CTRL_{new_name}")
+            if pose_bone and pose_bone.cylinder_props.part_name == old_name:
+                pose_bone.cylinder_props.part_name = new_name
+
+        if template_obj:
+            context.view_layer.objects.active = template_obj
+            with context.temp_override(**override):
+                bpy.ops.object.mode_set(mode='EDIT')
+            edit_bones = template_obj.data.edit_bones
+            temp_bone = edit_bones.get(f"TEMP_{old_name}")
+            if temp_bone:
+                temp_bone.name = f"TEMP_{new_name}"
+            follow_bone = edit_bones.get(f"TEMP_follow_{old_name}")
+            if follow_bone:
+                follow_bone.name = f"TEMP_follow_{new_name}"
+            with context.temp_override(**override):
+                bpy.ops.object.mode_set(mode='OBJECT')
+
+        item.name = new_name
+        for part in props.parts:
+            if part.parent_name == old_name:
+                part.parent_name = new_name
+
+        update_rig_visibility(context, rig_name)
+        return {'FINISHED'}
+
+
 # Parents the selected part directly to root, removing it from any sub-hierarchy.
 class RIGTOOL_OT_parent_to_root(bpy.types.Operator):
     bl_idname = "rig_tool.parent_to_root"
@@ -272,10 +369,12 @@ classes = [
     RIGTOOL_OT_create_bone,
     RIGTOOL_OT_template_revolver,
     RIGTOOL_OT_add_cylinder_part,
+    RIGTOOL_OT_create_cylinder_part,
     RIGTOOL_OT_set_mode,
     RIGTOOL_OT_move_part,
     RIGTOOL_OT_set_parent,
     RIGTOOL_OT_parent_to_root,
+    RIGTOOL_OT_rename_part,
 ]
 
 def register():

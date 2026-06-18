@@ -7,6 +7,7 @@ from .build import (
     armatures_visible,
     update_rig_visibility,
     _get_view3d_override,
+    _unique_part_name,
 )
 from .part_templates import create_cylinder_part
 from .templates import create_revolver_template
