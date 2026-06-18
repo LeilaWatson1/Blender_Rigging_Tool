@@ -9,14 +9,18 @@ bl_info = {
 }
 
 import bpy
-from . import properties, operators, panels
+from . import properties, part_template_properties, operators, panels, part_template_panels
 
 def register():
     properties.register()
+    part_template_properties.register()
     operators.register()
     panels.register()
+    part_template_panels.register()
 
 def unregister():
+    part_template_panels.unregister()
     panels.unregister()
     operators.unregister()
+    part_template_properties.unregister()
     properties.unregister()

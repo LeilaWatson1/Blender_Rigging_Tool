@@ -75,36 +75,10 @@ class VIEW3D_PT_rig_tool(bpy.types.Panel):
         op.mode = 'POSE'
 
 
-# Shows capacity and rotate_to_round in the Item N-panel tab when CTRL_cylinder is the active bone.
-class VIEW3D_PT_cylinder_props(bpy.types.Panel):
-    bl_label = "Cylinder"
-    bl_idname = "VIEW3D_PT_cylinder_props"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "UI"
-    bl_category = "Item"
-
-    # Returns True only when CTRL_cylinder is the active bone in Pose mode.
-    @classmethod
-    def poll(cls, context):
-        obj = context.active_object
-        bone = context.active_pose_bone
-        return (obj and obj.type == 'ARMATURE' and obj.mode == 'POSE'
-                and bone and bone.name == "CTRL_cylinder")
-
-    # Draws the capacity and rotate_to_round properties for the cylinder bone.
-    def draw(self, context):
-        layout = self.layout
-        bone = context.active_pose_bone
-        layout.prop(bone.cylinder_props, "capacity")
-        layout.prop(bone.cylinder_props, "rotate_to_round")
-
-
 def register():
     bpy.utils.register_class(RIGTOOL_UL_parts_list)
     bpy.utils.register_class(VIEW3D_PT_rig_tool)
-    bpy.utils.register_class(VIEW3D_PT_cylinder_props)
 
 def unregister():
-    bpy.utils.unregister_class(VIEW3D_PT_cylinder_props)
     bpy.utils.unregister_class(VIEW3D_PT_rig_tool)
     bpy.utils.unregister_class(RIGTOOL_UL_parts_list)

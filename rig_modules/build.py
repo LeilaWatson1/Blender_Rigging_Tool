@@ -154,6 +154,7 @@ def create_base_rig(context, rig_name):
     ctrl_root_pose = ctrl_obj.pose.bones["CTRL_root"]
     ctrl_root_pose.custom_shape = ctrl_widget
     ctrl_root_pose.use_custom_shape_bone_size = False
+    ctrl_root_pose.rotation_mode = 'QUATERNION'
     ctrl_root_pose.color.palette = 'CUSTOM'
     ctrl_root_pose.color.custom.normal = (0.8, 0.0, 0.0)
     ctrl_root_pose.color.custom.select = (1.0, 0.4, 0.4)
@@ -222,6 +223,7 @@ def create_bone(context, rig_name, bone_name, is_deforming, has_control, parent_
         ctrl_pose_bone = ctrl_obj.pose.bones[ctrl_bone_name]
         ctrl_pose_bone.custom_shape = ctrl_widget
         ctrl_pose_bone.use_custom_shape_bone_size = False
+        ctrl_pose_bone.rotation_mode = 'QUATERNION'
         ctrl_pose_bone.color.palette = 'CUSTOM'
         ctrl_pose_bone.color.custom.normal = ctrl_color
         ctrl_pose_bone.color.custom.select = tuple(min(1.0, c + 0.4) for c in ctrl_color)
