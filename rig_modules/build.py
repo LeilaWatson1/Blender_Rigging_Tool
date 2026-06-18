@@ -3,12 +3,20 @@ import math
 from .widgets import create_circle_widget, create_arc_arrow_widget, create_circle_arrow_widget
 
 
+# Returns a name guaranteed not to exist in the parts list, appending _001, _002 etc. if needed.
+def _unique_part_name(props, name):
+    existing = {part.name for part in props.parts}
+    if name not in existing:
+        return name
+    i = 1
+    while f"{name}_{i:03d}" in existing:
+        i += 1
+    return f"{name}_{i:03d}"
+
+
 # Appends a new entry to the parts list in the UI, computing indent depth from the parent.
 def _add_part(context, part_name, parent_name=""):
     props = context.scene.rig_tool
-    for part in props.parts:
-        if part.name == part_name:
-            return
     indent = 0
     for part in props.parts:
         if part.name == parent_name:
@@ -176,11 +184,12 @@ def create_base_rig(context, rig_name):
 
 
 # Creates DEF_ and/or CTRL_ bones for a named part, sets up the widget, assigns the Copy Transforms
-# constraint linking DEF to CTRL, and registers the part in the UI list.
+# constraint linking DEF to CTRL, registers the part in the UI list, and returns the actual name used.
 def create_bone(context, rig_name, bone_name, is_deforming, has_control, parent_bone_name="root", ctrl_radius=0.5, ctrl_axis='Z', bone_head=(0.0, 0.0, 0.0), bone_tail=(0.0, 0.1, 0.0), ctrl_offset=(0.0, 0.0, 0.0), widget_type='circle', ctrl_shape_rotation=0.0, ctrl_color=(0.8, 0.0, 0.0)):
     def_obj, ctrl_obj, template_obj = create_base_rig(context, rig_name)
     override = _get_view3d_override(context)
 
+    bone_name      = _unique_part_name(context.scene.rig_tool, bone_name)
     def_bone_name  = f"DEF_{bone_name}"
     ctrl_bone_name = f"CTRL_{bone_name}"
 
@@ -244,6 +253,7 @@ def create_bone(context, rig_name, bone_name, is_deforming, has_control, parent_
 
     _add_part(context, bone_name, parent_bone_name)
     add_template(context, rig_name, bone_name, parent_bone=parent_bone_name, bone_head=bone_head, bone_tail=bone_tail)
+    return bone_name
 
 
 # Visibility-aware wrapper: makes all armatures visible, creates the bone, then restores visibility.

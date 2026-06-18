@@ -10,17 +10,17 @@ def _get_rotate_items(self, context):
     return [(str(i), str(i), "") for i in range(1, self.capacity + 1)]
 
 
-# Rotates CTRL_cylinder to the selected round's position by dividing 360 degrees by capacity.
+# Rotates the cylinder control to the selected round's position by dividing 360 degrees by capacity.
 def _on_rotate_to_round_update(self, context):
-    if not self.rotate_to_round:
+    if not self.rotate_to_round or not self.part_name:
         return
     props    = context.scene.rig_tool
     ctrl_obj = bpy.data.objects.get(f"CTRL_{props.rig_name}")
     if not ctrl_obj:
         return
 
-    follow_bone = ctrl_obj.pose.bones.get("HIDE_follow_cylinder")
-    ctrl_bone   = ctrl_obj.pose.bones.get("CTRL_cylinder")
+    follow_bone = ctrl_obj.pose.bones.get(f"HIDE_follow_{self.part_name}")
+    ctrl_bone   = ctrl_obj.pose.bones.get(f"CTRL_{self.part_name}")
     if not follow_bone or not ctrl_bone:
         return
 
@@ -49,6 +49,7 @@ def _on_capacity_update(self, context):
 
 # Holds the cylinder's animation properties, registered on PoseBone so they are keyframeable.
 class CylinderBoneProps(bpy.types.PropertyGroup):
+    part_name: bpy.props.StringProperty()
     capacity: bpy.props.IntProperty(
         name="Capacity",
         default=6,

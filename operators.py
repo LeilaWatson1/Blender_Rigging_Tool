@@ -167,12 +167,31 @@ class RIGTOOL_OT_set_mode(bpy.types.Operator):
     mode: bpy.props.StringProperty()
 
     def execute(self, context):
-        props = context.scene.rig_tool
+        props    = context.scene.rig_tool
         props.mode = self.mode
+        override = _get_view3d_override(context)
+
+        if context.active_object and context.active_object.mode != 'OBJECT':
+            with context.temp_override(**override):
+                bpy.ops.object.mode_set(mode='OBJECT')
+
         if self.mode == 'POSE':
             armatures_visible(props.rig_name)
             pose_update(context, props.rig_name)
-        update_rig_visibility(context, props.rig_name)
+            update_rig_visibility(context, props.rig_name)
+            ctrl_obj = bpy.data.objects.get(f"CTRL_{props.rig_name}")
+            if ctrl_obj:
+                context.view_layer.objects.active = ctrl_obj
+                with context.temp_override(**override):
+                    bpy.ops.object.mode_set(mode='POSE')
+        else:
+            update_rig_visibility(context, props.rig_name)
+            template_obj = bpy.data.objects.get(f"TEMPLATE_{props.rig_name}")
+            if template_obj:
+                context.view_layer.objects.active = template_obj
+                with context.temp_override(**override):
+                    bpy.ops.object.mode_set(mode='EDIT')
+
         return {'FINISHED'}
 
 

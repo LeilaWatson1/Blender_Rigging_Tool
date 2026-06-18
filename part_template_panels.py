@@ -11,20 +11,22 @@ class VIEW3D_PT_cylinder_props(bpy.types.Panel):
     bl_region_type = "UI"
     bl_category = "Item"
 
-    # Returns True only when CTRL_cylinder is the active bone in Pose mode.
+    # Returns True when the active bone in Pose mode is any cylinder control bone.
     @classmethod
     def poll(cls, context):
         obj = context.active_object
         bone = context.active_pose_bone
         return (obj and obj.type == 'ARMATURE' and obj.mode == 'POSE'
-                and bone and bone.name == "CTRL_cylinder")
+                and bone and bool(bone.cylinder_props.part_name))
 
     # Draws the capacity and rotate_to_round properties for the cylinder bone.
     def draw(self, context):
         layout = self.layout
         bone = context.active_pose_bone
         layout.prop(bone.cylinder_props, "capacity")
-        layout.prop(bone.cylinder_props, "rotate_to_round")
+        split = layout.split(factor=0.50)
+        split.label(text="Rotate to Round")
+        split.prop(bone.cylinder_props, "rotate_to_round", text="")
 
 
 def register():
