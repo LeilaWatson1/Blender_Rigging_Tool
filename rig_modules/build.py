@@ -41,6 +41,19 @@ def _add_part(context, part_name, parent_name=""):
             props.parts.move(new_idx, insert_idx)
 
 
+# Swaps X and Y of a coordinate tuple when front_axis is 'X', leaving Z unchanged.
+def _apply_front_axis(coord, front_axis):
+    x, y, z = coord
+    return (y, x, z) if front_axis == 'X' else coord
+
+
+# Swaps 'X' and 'Y' axis labels when front_axis is 'X', leaving 'Z' unchanged.
+def _apply_front_axis_str(axis, front_axis):
+    if front_axis != 'X':
+        return axis
+    return {'X': 'Y', 'Y': 'X'}.get(axis, axis)
+
+
 # Returns a context override dict for the active VIEW_3D window, required by bpy.ops calls from the N-panel.
 def _get_view3d_override(context):
     for window in context.window_manager.windows:

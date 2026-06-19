@@ -86,6 +86,16 @@ class VIEW3D_PT_rig_tool(bpy.types.Panel):
         op = row.operator("rig_tool.set_mode", text="Pose Mode", depress=(props.mode == 'POSE'))
         op.mode = 'POSE'
 
+        row = layout.row()
+        row.prop(props, "show_export",
+                 icon='TRIA_DOWN' if props.show_export else 'TRIA_RIGHT',
+                 emboss=False)
+        if props.show_export:
+            box = layout.box()
+            row = box.row()
+            row.label(text="Front Axis")
+            row.prop(props, "front_axis", expand=True)
+
 
 def register():
     bpy.utils.register_class(RIGTOOL_UL_parts_list)

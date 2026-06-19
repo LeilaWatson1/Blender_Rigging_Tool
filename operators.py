@@ -170,7 +170,7 @@ class RIGTOOL_OT_create_cylinder_part(bpy.types.Operator):
     def execute(self, context):
         props  = context.scene.rig_tool
         parent = props.parts[props.active_part_index].name if props.parts and props.active_part_index < len(props.parts) else "root"
-        create_cylinder_part(context, props.rig_name, parent_bone_name=parent, base_name=props.cylinder_name)
+        create_cylinder_part(context, props.rig_name, parent_bone_name=parent, base_name=props.cylinder_name, front_axis=props.front_axis)
         props.show_add_cylinder_ui = False
         return {'FINISHED'}
 

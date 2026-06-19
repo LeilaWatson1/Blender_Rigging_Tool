@@ -8,6 +8,8 @@ from .build import (
     update_rig_visibility,
     _get_view3d_override,
     _unique_part_name,
+    _apply_front_axis,
+    _apply_front_axis_str,
 )
 from .part_templates import create_cylinder_part
 from .templates import create_revolver_template

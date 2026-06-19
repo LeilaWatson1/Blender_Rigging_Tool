@@ -58,6 +58,12 @@ class RigToolProperties(bpy.types.PropertyGroup):
         default='TEMPLATE',
     )
     show_parts:        bpy.props.BoolProperty(name="Parts", default=False)
+    show_export:       bpy.props.BoolProperty(name="Export", default=False)
+    front_axis:        bpy.props.EnumProperty(
+                           name="Front Axis",
+                           items=[('X', 'X', ''), ('Y', 'Y', '')],
+                           default='X',
+                       )
     parts:             bpy.props.CollectionProperty(type=RigPartItem)
     active_part_index: bpy.props.IntProperty(default=0, update=_on_part_selected)
     show_parts_list:   bpy.props.BoolProperty(name="Parts List", default=True)
