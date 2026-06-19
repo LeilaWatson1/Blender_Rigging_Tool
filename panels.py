@@ -47,6 +47,7 @@ class VIEW3D_PT_rig_tool(bpy.types.Panel):
                 row = box.row(align=True)
                 row.prop(props, "rename_input", text="")
                 row.operator("rig_tool.rename_part")
+                box.operator("rig_tool.delete_part")
 
         row = layout.row()
         row.prop(props, "show_templates",

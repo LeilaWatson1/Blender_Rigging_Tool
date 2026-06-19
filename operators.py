@@ -267,6 +267,78 @@ class RIGTOOL_OT_set_parent(bpy.types.Operator):
         return {'FINISHED'}
 
 
+# Deletes the selected part from the list and all three armatures, re-parenting its children to its former parent.
+class RIGTOOL_OT_delete_part(bpy.types.Operator):
+    bl_idname = "rig_tool.delete_part"
+    bl_label = "Delete"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        props = context.scene.rig_tool
+        if not props.parts or props.active_part_index >= len(props.parts):
+            return {'CANCELLED'}
+
+        item       = props.parts[props.active_part_index]
+        old_name   = item.name
+        old_parent = item.parent_name
+        rig_name   = props.rig_name
+        override   = _get_view3d_override(context)
+        armatures_visible(rig_name)
+
+        for part in props.parts:
+            if part.parent_name == old_name:
+                part.parent_name = old_parent
+        _recalculate_indents(props)
+
+        def_obj      = bpy.data.objects.get(f"DEF_{rig_name}")
+        ctrl_obj     = bpy.data.objects.get(f"CTRL_{rig_name}")
+        template_obj = bpy.data.objects.get(f"TEMPLATE_{rig_name}")
+
+        if def_obj:
+            context.view_layer.objects.active = def_obj
+            with context.temp_override(**override):
+                bpy.ops.object.mode_set(mode='EDIT')
+            bone = def_obj.data.edit_bones.get(f"DEF_{old_name}")
+            if bone:
+                def_obj.data.edit_bones.remove(bone)
+            with context.temp_override(**override):
+                bpy.ops.object.mode_set(mode='OBJECT')
+
+        if ctrl_obj:
+            context.view_layer.objects.active = ctrl_obj
+            with context.temp_override(**override):
+                bpy.ops.object.mode_set(mode='EDIT')
+            edit_bones = ctrl_obj.data.edit_bones
+            ctrl_bone = edit_bones.get(f"CTRL_{old_name}")
+            if ctrl_bone:
+                edit_bones.remove(ctrl_bone)
+            hide_bone = edit_bones.get(f"HIDE_follow_{old_name}")
+            if hide_bone:
+                edit_bones.remove(hide_bone)
+            with context.temp_override(**override):
+                bpy.ops.object.mode_set(mode='OBJECT')
+
+        if template_obj:
+            context.view_layer.objects.active = template_obj
+            with context.temp_override(**override):
+                bpy.ops.object.mode_set(mode='EDIT')
+            edit_bones = template_obj.data.edit_bones
+            temp_bone = edit_bones.get(f"TEMP_{old_name}")
+            if temp_bone:
+                edit_bones.remove(temp_bone)
+            follow_bone = edit_bones.get(f"TEMP_follow_{old_name}")
+            if follow_bone:
+                edit_bones.remove(follow_bone)
+            with context.temp_override(**override):
+                bpy.ops.object.mode_set(mode='OBJECT')
+
+        props.parts.remove(props.active_part_index)
+        props.active_part_index = min(props.active_part_index, len(props.parts) - 1)
+
+        update_rig_visibility(context, rig_name)
+        return {'FINISHED'}
+
+
 # Renames the selected part in the parts list and across all three armatures.
 class RIGTOOL_OT_rename_part(bpy.types.Operator):
     bl_idname = "rig_tool.rename_part"
@@ -374,6 +446,7 @@ classes = [
     RIGTOOL_OT_move_part,
     RIGTOOL_OT_set_parent,
     RIGTOOL_OT_parent_to_root,
+    RIGTOOL_OT_delete_part,
     RIGTOOL_OT_rename_part,
 ]
 
