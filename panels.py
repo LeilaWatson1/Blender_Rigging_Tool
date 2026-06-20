@@ -22,7 +22,15 @@ class VIEW3D_PT_rig_tool(bpy.types.Panel):
         layout = self.layout
         props = context.scene.rig_tool
 
-        layout.prop(props, "rig_name")
+        split = layout.split(factor=0.30)
+        split.label(text="Current Rig")
+        split.prop(props, "current_rig", text="")
+
+        split = layout.split(factor=0.25)
+        split.label(text="New Rig")
+        row = split.row(align=True)
+        row.prop(props, "rig_name", text="")
+        row.operator("rig_tool.create_rig", text="Create")
 
         row = layout.row()
         row.prop(props, "show_parts_list",

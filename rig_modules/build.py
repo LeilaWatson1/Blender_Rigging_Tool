@@ -3,9 +3,12 @@ import math
 from .widgets import create_circle_widget, create_arc_arrow_widget, create_circle_arrow_widget
 
 
-# Returns a name guaranteed not to exist in the parts list, appending _001, _002 etc. if needed.
-def _unique_part_name(props, name):
-    existing = {part.name for part in props.parts}
+# Returns a unique name by checking existing rigs (name_type='rig') or parts (name_type='part'), appending _001, _002 etc. if needed.
+def _unique_name(name_type, name, props=None):
+    if name_type == 'rig':
+        existing = {obj.name[4:] for obj in bpy.data.objects if obj.name.startswith("DEF_")}
+    else:
+        existing = {part.name for part in props.parts}
     if name not in existing:
         return name
     i = 1
@@ -132,6 +135,7 @@ def add_template(context, rig_name, bone_name, parent_bone=None, child_bone=None
 
 # Creates the DEF/CTRL/TEMPLATE armatures, root bones, widget collection, and root Copy Transforms constraint.
 # Returns early with existing objects if the rig collection already exists.
+# Root bone orientation follows front_axis from scene properties.
 def create_base_rig(context, rig_name):
     if rig_name in bpy.data.collections:
         return (
@@ -140,7 +144,9 @@ def create_base_rig(context, rig_name):
             bpy.data.objects.get(f"TEMPLATE_{rig_name}"),
         )
 
-    override = _get_view3d_override(context)
+    front_axis = context.scene.rig_tool.front_axis
+    ax         = lambda c: _apply_front_axis(c, front_axis)
+    override   = _get_view3d_override(context)
 
     rig_collection = bpy.data.collections.new(rig_name)
     context.scene.collection.children.link(rig_collection)
@@ -166,8 +172,8 @@ def create_base_rig(context, rig_name):
     with context.temp_override(**override):
         bpy.ops.object.mode_set(mode='EDIT')
     root_bone = def_armature.edit_bones.new("root")
-    root_bone.head = (0.0, 0.0, 0.0)
-    root_bone.tail = (0.0, 0.1, 0.0)
+    root_bone.head = ax((0.0, 0.0, 0.0))
+    root_bone.tail = ax((0.0, 0.1, 0.0))
     with context.temp_override(**override):
         bpy.ops.object.mode_set(mode='OBJECT')
 
@@ -175,8 +181,8 @@ def create_base_rig(context, rig_name):
     with context.temp_override(**override):
         bpy.ops.object.mode_set(mode='EDIT')
     ctrl_root = ctrl_armature.edit_bones.new("CTRL_root")
-    ctrl_root.head = (0.0, 0.0, 0.0)
-    ctrl_root.tail = (0.0, 0.1, 0.0)
+    ctrl_root.head = ax((0.0, 0.0, 0.0))
+    ctrl_root.tail = ax((0.0, 0.1, 0.0))
     with context.temp_override(**override):
         bpy.ops.object.mode_set(mode='OBJECT')
 
@@ -215,7 +221,13 @@ def create_bone(context, rig_name, bone_name, is_deforming, has_control, parent_
     def_obj, ctrl_obj, template_obj = create_base_rig(context, rig_name)
     override = _get_view3d_override(context)
 
-    bone_name      = _unique_part_name(context.scene.rig_tool, bone_name)
+    front_axis  = context.scene.rig_tool.front_axis
+    bone_head   = _apply_front_axis(bone_head, front_axis)
+    bone_tail   = _apply_front_axis(bone_tail, front_axis)
+    ctrl_offset = _apply_front_axis(ctrl_offset, front_axis)
+    ctrl_axis   = _apply_front_axis_str(ctrl_axis, front_axis)
+
+    bone_name      = _unique_name('part', bone_name, context.scene.rig_tool)
     def_bone_name  = f"DEF_{bone_name}"
     ctrl_bone_name = f"CTRL_{bone_name}"
 

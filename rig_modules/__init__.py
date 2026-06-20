@@ -7,7 +7,7 @@ from .build import (
     armatures_visible,
     update_rig_visibility,
     _get_view3d_override,
-    _unique_part_name,
+    _unique_name,
     _apply_front_axis,
     _apply_front_axis_str,
 )

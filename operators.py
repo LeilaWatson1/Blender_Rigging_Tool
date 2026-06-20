@@ -1,5 +1,5 @@
 import bpy
-from .rig_modules import create_base_rig, add_bone, create_revolver_template, create_cylinder_part, update_rig_visibility, armatures_visible, pose_update, _get_view3d_override, _unique_part_name
+from .rig_modules import create_base_rig, add_bone, create_revolver_template, create_cylinder_part, update_rig_visibility, armatures_visible, pose_update, _get_view3d_override, _unique_name
 
 # the Python functions behind your shelf buttons
 
@@ -99,6 +99,21 @@ def _set_parent(context, item, rig_name, new_parent):
     _reparent_bones(context, bone_name, rig_name, new_parent)
 
 
+# Creates a new base rig with a unique name and sets it as the current rig.
+class RIGTOOL_OT_create_rig(bpy.types.Operator):
+    bl_idname = "rig_tool.create_rig"
+    bl_label = "Create"
+    bl_description = "Create a new empty rig and set it as the current rig"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        props    = context.scene.rig_tool
+        rig_name = _unique_name('rig', props.rig_name)
+        create_base_rig(context, rig_name)
+        props.current_rig = rig_name
+        return {'FINISHED'}
+
+
 # Toggles the Single Bone UI panel open or closed.
 class RIGTOOL_OT_add_bone(bpy.types.Operator):
     bl_idname = "rig_tool.add_bone"
@@ -120,11 +135,14 @@ class RIGTOOL_OT_create_bone(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
-        props  = context.scene.rig_tool
+        props    = context.scene.rig_tool
+        rig_name = props.current_rig
+        if not rig_name or rig_name == 'NONE':
+            return {'CANCELLED'}
         parent = props.parts[props.active_part_index].name if props.parts and props.active_part_index < len(props.parts) else "root"
         add_bone(
             context,
-            props.rig_name,
+            rig_name,
             props.bone_name,
             props.is_deforming,
             props.has_control,
@@ -142,8 +160,11 @@ class RIGTOOL_OT_template_revolver(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
-        props = context.scene.rig_tool
-        create_revolver_template(context, props.rig_name)
+        props    = context.scene.rig_tool
+        rig_name = props.current_rig
+        if not rig_name or rig_name == 'NONE':
+            return {'CANCELLED'}
+        create_revolver_template(context, rig_name)
         return {'FINISHED'}
 
 
@@ -168,9 +189,12 @@ class RIGTOOL_OT_create_cylinder_part(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
-        props  = context.scene.rig_tool
+        props    = context.scene.rig_tool
+        rig_name = props.current_rig
+        if not rig_name or rig_name == 'NONE':
+            return {'CANCELLED'}
         parent = props.parts[props.active_part_index].name if props.parts and props.active_part_index < len(props.parts) else "root"
-        create_cylinder_part(context, props.rig_name, parent_bone_name=parent, base_name=props.cylinder_name, front_axis=props.front_axis)
+        create_cylinder_part(context, rig_name, parent_bone_name=parent, base_name=props.cylinder_name)
         props.show_add_cylinder_ui = False
         return {'FINISHED'}
 
@@ -185,6 +209,9 @@ class RIGTOOL_OT_set_mode(bpy.types.Operator):
 
     def execute(self, context):
         props    = context.scene.rig_tool
+        rig_name = props.current_rig
+        if not rig_name or rig_name == 'NONE':
+            return {'CANCELLED'}
         props.mode = self.mode
         override = _get_view3d_override(context)
 
@@ -193,17 +220,17 @@ class RIGTOOL_OT_set_mode(bpy.types.Operator):
                 bpy.ops.object.mode_set(mode='OBJECT')
 
         if self.mode == 'POSE':
-            armatures_visible(props.rig_name)
-            pose_update(context, props.rig_name)
-            update_rig_visibility(context, props.rig_name)
-            ctrl_obj = bpy.data.objects.get(f"CTRL_{props.rig_name}")
+            armatures_visible(rig_name)
+            pose_update(context, rig_name)
+            update_rig_visibility(context, rig_name)
+            ctrl_obj = bpy.data.objects.get(f"CTRL_{rig_name}")
             if ctrl_obj:
                 context.view_layer.objects.active = ctrl_obj
                 with context.temp_override(**override):
                     bpy.ops.object.mode_set(mode='POSE')
         else:
-            update_rig_visibility(context, props.rig_name)
-            template_obj = bpy.data.objects.get(f"TEMPLATE_{props.rig_name}")
+            update_rig_visibility(context, rig_name)
+            template_obj = bpy.data.objects.get(f"TEMPLATE_{rig_name}")
             if template_obj:
                 context.view_layer.objects.active = template_obj
                 with context.temp_override(**override):
@@ -244,7 +271,7 @@ class RIGTOOL_OT_move_part(bpy.types.Operator):
         if item.parent_name != new_parent:
             item.parent_name = new_parent
             _recalculate_indents(props)
-            _reparent_bones(context, item.name, props.rig_name, new_parent)
+            _reparent_bones(context, item.name, props.current_rig, new_parent)
 
         return {'FINISHED'}
 
@@ -263,7 +290,7 @@ class RIGTOOL_OT_set_parent(bpy.types.Operator):
         new_parent = props.parent_selector
         if not new_parent or new_parent == item.name:
             return {'CANCELLED'}
-        _set_parent(context, item, props.rig_name, new_parent)
+        _set_parent(context, item, props.current_rig, new_parent)
         return {'FINISHED'}
 
 
@@ -281,7 +308,9 @@ class RIGTOOL_OT_delete_part(bpy.types.Operator):
         item       = props.parts[props.active_part_index]
         old_name   = item.name
         old_parent = item.parent_name
-        rig_name   = props.rig_name
+        rig_name   = props.current_rig
+        if not rig_name or rig_name == 'NONE':
+            return {'CANCELLED'}
         override   = _get_view3d_override(context)
         armatures_visible(rig_name)
 
@@ -360,8 +389,10 @@ class RIGTOOL_OT_rename_part(bpy.types.Operator):
         if old_name == new_name:
             return {'CANCELLED'}
 
-        new_name = _unique_part_name(props, new_name)
-        rig_name = props.rig_name
+        new_name = _unique_name('part', new_name, props)
+        rig_name = props.current_rig
+        if not rig_name or rig_name == 'NONE':
+            return {'CANCELLED'}
         override = _get_view3d_override(context)
         armatures_visible(rig_name)
 
@@ -437,6 +468,7 @@ class RIGTOOL_OT_parent_to_root(bpy.types.Operator):
 
 
 classes = [
+    RIGTOOL_OT_create_rig,
     RIGTOOL_OT_add_bone,
     RIGTOOL_OT_create_bone,
     RIGTOOL_OT_template_revolver,
