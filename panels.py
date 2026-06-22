@@ -57,6 +57,12 @@ class VIEW3D_PT_rig_tool(bpy.types.Panel):
                 row.operator("rig_tool.rename_part")
                 box.operator("rig_tool.delete_part")
 
+        row = layout.row(align=True)
+        op = row.operator("rig_tool.set_mode", text="Template Mode", depress=(props.mode == 'TEMPLATE'))
+        op.mode = 'TEMPLATE'
+        op = row.operator("rig_tool.set_mode", text="Pose Mode", depress=(props.mode == 'POSE'))
+        op.mode = 'POSE'
+
         row = layout.row()
         row.prop(props, "show_templates",
                  icon='TRIA_DOWN' if props.show_templates else 'TRIA_RIGHT',
@@ -88,21 +94,17 @@ class VIEW3D_PT_rig_tool(bpy.types.Panel):
                 split.prop(props, "cylinder_name", text="")
                 inner.operator("rig_tool.create_cylinder_part")
 
-        row = layout.row(align=True)
-        op = row.operator("rig_tool.set_mode", text="Template Mode", depress=(props.mode == 'TEMPLATE'))
-        op.mode = 'TEMPLATE'
-        op = row.operator("rig_tool.set_mode", text="Pose Mode", depress=(props.mode == 'POSE'))
-        op.mode = 'POSE'
-
         row = layout.row()
         row.prop(props, "show_export",
                  icon='TRIA_DOWN' if props.show_export else 'TRIA_RIGHT',
                  emboss=False)
         if props.show_export:
             box = layout.box()
-            row = box.row()
-            row.label(text="Front Axis")
-            row.prop(props, "front_axis", expand=True)
+            split = box.split(factor=0.35)
+            split.label(text="Front Axis")
+            sub = split.row(align=True)
+            sub.prop(props, "front_axis", expand=True)
+            sub.operator("rig_tool.apply_front_axis", text="Apply")
 
 
 def register():

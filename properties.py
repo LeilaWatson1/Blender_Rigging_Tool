@@ -114,6 +114,11 @@ class RigToolProperties(bpy.types.PropertyGroup):
                            items=[('X', 'X', ''), ('Y', 'Y', '')],
                            default='X',
                        )
+    current_rig_axis:  bpy.props.EnumProperty(
+                           name="Current Rig Axis",
+                           items=[('X', 'X', ''), ('Y', 'Y', '')],
+                           default='X',
+                       )
     parts:             bpy.props.CollectionProperty(type=RigPartItem)
     active_part_index: bpy.props.IntProperty(default=0, update=_on_part_selected)
     show_parts_list:   bpy.props.BoolProperty(name="Parts List", default=True)

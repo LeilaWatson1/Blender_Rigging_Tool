@@ -1,4 +1,6 @@
 import bpy
+import math
+import mathutils
 from .rig_modules import create_base_rig, add_bone, create_revolver_template, create_cylinder_part, update_rig_visibility, armatures_visible, pose_update, _get_view3d_override, _unique_name
 
 # the Python functions behind your shelf buttons
@@ -110,7 +112,8 @@ class RIGTOOL_OT_create_rig(bpy.types.Operator):
         props    = context.scene.rig_tool
         rig_name = _unique_name('rig', props.rig_name)
         create_base_rig(context, rig_name)
-        props.current_rig = rig_name
+        props.current_rig      = rig_name
+        props.current_rig_axis = props.front_axis
         return {'FINISHED'}
 
 
@@ -450,6 +453,45 @@ class RIGTOOL_OT_rename_part(bpy.types.Operator):
         return {'FINISHED'}
 
 
+# Rotates the current rig to match props.front_axis, using current_rig_axis to track applied state.
+class RIGTOOL_OT_apply_front_axis(bpy.types.Operator):
+    bl_idname  = "rig_tool.apply_front_axis"
+    bl_label   = "Apply"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        props       = context.scene.rig_tool
+        target_axis = props.front_axis
+
+        if props.current_rig_axis == target_axis:
+            return {'FINISHED'}
+
+        rig_name = props.current_rig
+        if rig_name and rig_name != 'NONE':
+            angle    = -math.pi / 2 if target_axis == 'X' else math.pi / 2
+            rotation = mathutils.Matrix.Rotation(angle, 4, 'Z')
+            override = _get_view3d_override(context)
+            armatures_visible(rig_name)
+
+            for prefix in ("DEF_", "CTRL_", "TEMPLATE_"):
+                obj = bpy.data.objects.get(f"{prefix}{rig_name}")
+                if not obj:
+                    continue
+                context.view_layer.objects.active = obj
+                with context.temp_override(**override):
+                    bpy.ops.object.mode_set(mode='EDIT')
+                for bone in obj.data.edit_bones:
+                    bone.head = rotation @ bone.head
+                    bone.tail = rotation @ bone.tail
+                with context.temp_override(**override):
+                    bpy.ops.object.mode_set(mode='OBJECT')
+
+            update_rig_visibility(context, rig_name)
+
+        props.current_rig_axis = target_axis
+        return {'FINISHED'}
+
+
 # Parents the selected part directly to root, removing it from any sub-hierarchy.
 class RIGTOOL_OT_parent_to_root(bpy.types.Operator):
     bl_idname = "rig_tool.parent_to_root"
@@ -463,7 +505,7 @@ class RIGTOOL_OT_parent_to_root(bpy.types.Operator):
         item = props.parts[props.active_part_index]
         if item.parent_name == "root":
             return {'CANCELLED'}
-        _set_parent(context, item, props.rig_name, "root")
+        _set_parent(context, item, props.current_rig, "root")
         return {'FINISHED'}
 
 
@@ -477,6 +519,7 @@ classes = [
     RIGTOOL_OT_set_mode,
     RIGTOOL_OT_move_part,
     RIGTOOL_OT_set_parent,
+    RIGTOOL_OT_apply_front_axis,
     RIGTOOL_OT_parent_to_root,
     RIGTOOL_OT_delete_part,
     RIGTOOL_OT_rename_part,

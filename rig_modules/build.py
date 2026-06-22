@@ -1,5 +1,6 @@
 import bpy
 import math
+import mathutils
 from .widgets import create_circle_widget, create_arc_arrow_widget, create_circle_arrow_widget
 
 
@@ -44,15 +45,15 @@ def _add_part(context, part_name, parent_name=""):
             props.parts.move(new_idx, insert_idx)
 
 
-# Swaps X and Y of a coordinate tuple when front_axis is 'X', leaving Z unchanged.
+# Rotates a coordinate tuple +90° around Z when front_axis is 'Y', converting X-native to Y-native.
 def _apply_front_axis(coord, front_axis):
     x, y, z = coord
-    return (y, x, z) if front_axis == 'X' else coord
+    return (-y, x, z) if front_axis == 'Y' else coord
 
 
-# Swaps 'X' and 'Y' axis labels when front_axis is 'X', leaving 'Z' unchanged.
+# Swaps 'X' and 'Y' axis labels when front_axis is 'Y', leaving 'Z' unchanged.
 def _apply_front_axis_str(axis, front_axis):
-    if front_axis != 'X':
+    if front_axis != 'Y':
         return axis
     return {'X': 'Y', 'Y': 'X'}.get(axis, axis)
 
@@ -173,7 +174,7 @@ def create_base_rig(context, rig_name):
         bpy.ops.object.mode_set(mode='EDIT')
     root_bone = def_armature.edit_bones.new("root")
     root_bone.head = ax((0.0, 0.0, 0.0))
-    root_bone.tail = ax((0.0, 0.1, 0.0))
+    root_bone.tail = ax((0.1, 0.0, 0.0))
     with context.temp_override(**override):
         bpy.ops.object.mode_set(mode='OBJECT')
 
@@ -182,7 +183,7 @@ def create_base_rig(context, rig_name):
         bpy.ops.object.mode_set(mode='EDIT')
     ctrl_root = ctrl_armature.edit_bones.new("CTRL_root")
     ctrl_root.head = ax((0.0, 0.0, 0.0))
-    ctrl_root.tail = ax((0.0, 0.1, 0.0))
+    ctrl_root.tail = ax((0.1, 0.0, 0.0))
     with context.temp_override(**override):
         bpy.ops.object.mode_set(mode='OBJECT')
 
@@ -217,15 +218,13 @@ def create_base_rig(context, rig_name):
 
 # Creates DEF_ and/or CTRL_ bones for a named part, sets up the widget, assigns the Copy Transforms
 # constraint linking DEF to CTRL, registers the part in the UI list, and returns the actual name used.
-def create_bone(context, rig_name, bone_name, is_deforming, has_control, parent_bone_name="root", ctrl_radius=0.5, ctrl_axis='Z', bone_head=(0.0, 0.0, 0.0), bone_tail=(0.0, 0.1, 0.0), ctrl_offset=(0.0, 0.0, 0.0), widget_type='circle', ctrl_shape_rotation=0.0, ctrl_color=(0.8, 0.0, 0.0)):
+def create_bone(context, rig_name, bone_name, is_deforming, has_control, parent_bone_name="root", ctrl_radius=0.5, ctrl_axis='Z', bone_head=(0.0, 0.0, 0.0), bone_tail=(0.0, 0.1, 0.0), ctrl_offset=(0.0, 0.0, 0.0), widget_type='circle', ctrl_shape_rotation=0.0, ctrl_color=(0.8, 0.0, 0.0), ctrl_widget_rotation_z=0.0):
     def_obj, ctrl_obj, template_obj = create_base_rig(context, rig_name)
     override = _get_view3d_override(context)
 
-    front_axis  = context.scene.rig_tool.front_axis
-    bone_head   = _apply_front_axis(bone_head, front_axis)
-    bone_tail   = _apply_front_axis(bone_tail, front_axis)
-    ctrl_offset = _apply_front_axis(ctrl_offset, front_axis)
-    ctrl_axis   = _apply_front_axis_str(ctrl_axis, front_axis)
+    front_axis = context.scene.rig_tool.front_axis
+    bone_head  = _apply_front_axis(bone_head, front_axis)
+    bone_tail  = _apply_front_axis(bone_tail, front_axis)
 
     bone_name      = _unique_name('part', bone_name, context.scene.rig_tool)
     def_bone_name  = f"DEF_{bone_name}"
@@ -252,6 +251,12 @@ def create_bone(context, rig_name, bone_name, is_deforming, has_control, parent_
             ctrl_widget = create_circle_arrow_widget(f"WGT_{rig_name}_{bone_name}", wgt_collection, radius=ctrl_radius, axis=ctrl_axis, offset=ctrl_offset, shape_rotation=ctrl_shape_rotation)
         else:
             ctrl_widget = create_circle_widget(f"WGT_{rig_name}_{bone_name}", wgt_collection, radius=ctrl_radius, axis=ctrl_axis, offset=ctrl_offset, shape_rotation=ctrl_shape_rotation)
+
+        if ctrl_widget_rotation_z != 0.0:
+            rot3   = mathutils.Matrix.Rotation(ctrl_widget_rotation_z, 3, 'Z')
+            pivot  = mathutils.Vector(ctrl_offset)
+            for vert in ctrl_widget.data.vertices:
+                vert.co = rot3 @ (vert.co - pivot) + pivot
 
         context.view_layer.objects.active = ctrl_obj
         with context.temp_override(**override):
