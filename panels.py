@@ -32,6 +32,12 @@ class VIEW3D_PT_rig_tool(bpy.types.Panel):
         row.prop(props, "rig_name", text="")
         row.operator("rig_tool.create_rig", text="Create")
 
+        split = layout.split(factor=0.30)
+        split.label(text="Front Axis")
+        row = split.row(align=True)
+        row.prop(props, "front_axis", text="")
+        row.operator("rig_tool.apply_front_axis", text="Apply")
+
         row = layout.row()
         row.prop(props, "show_parts_list",
                  icon='TRIA_DOWN' if props.show_parts_list else 'TRIA_RIGHT',
@@ -69,7 +75,13 @@ class VIEW3D_PT_rig_tool(bpy.types.Panel):
                  emboss=False)
         if props.show_templates:
             box = layout.box()
-            box.operator("rig_tool.template_revolver")
+            box.operator("rig_tool.template_revolver", text="Revolver")
+            if props.show_revolver_ui:
+                inner = box.box()
+                split = inner.split(factor=0.50)
+                split.label(text="Name")
+                split.prop(props, "revolver_name", text="")
+                inner.operator("rig_tool.create_revolver_template")
 
         row = layout.row()
         row.prop(props, "show_parts",
@@ -100,11 +112,23 @@ class VIEW3D_PT_rig_tool(bpy.types.Panel):
                  emboss=False)
         if props.show_export:
             box = layout.box()
+
+            split = box.split(factor=0.35)
+            split.label(text="Engine")
+            split.prop(props, "export_engine", text="")
+
+            split = box.split(factor=0.35)
+            split.label(text="Format")
+            split.prop(props, "export_format", text="")
+
+            if props.export_engine == 'UNREAL':
+                box.prop(props, "scale_on_export")
+
             split = box.split(factor=0.35)
             split.label(text="Front Axis")
-            sub = split.row(align=True)
-            sub.prop(props, "front_axis", expand=True)
-            sub.operator("rig_tool.apply_front_axis", text="Apply")
+            split.prop(props, "export_front_axis", text="")
+
+            box.operator("rig_tool.export", text="Export")
 
 
 def register():

@@ -27,6 +27,19 @@ def _get_rig_items(self, context):
     return _rig_enum_cache
 
 
+# Sets export format and export front axis to the best defaults for the selected engine.
+def _on_engine_changed(self, context):
+    if self.export_engine == 'UNREAL':
+        self.export_format     = 'FBX'
+        self.export_front_axis = 'X'
+    elif self.export_engine == 'UNITY':
+        self.export_format     = 'FBX'
+        self.export_front_axis = 'Z'
+    elif self.export_engine == 'GODOT':
+        self.export_format     = 'GLTF'
+        self.export_front_axis = 'Z'
+
+
 # Clears the parts list and rebuilds it from the newly selected rig's armature bones.
 def _on_current_rig_changed(self, context):
     props = context.scene.rig_tool
@@ -89,6 +102,13 @@ class RigToolProperties(bpy.types.PropertyGroup):
         name="Templates",
         default=False,
     )
+    show_revolver_ui: bpy.props.BoolProperty(
+        default=False,
+    )
+    revolver_name: bpy.props.StringProperty(
+        name="Name Prefix",
+        default="",
+    )
     show_add_bone_ui: bpy.props.BoolProperty(
         default=False,
     )
@@ -109,14 +129,35 @@ class RigToolProperties(bpy.types.PropertyGroup):
     )
     show_parts:        bpy.props.BoolProperty(name="Parts", default=False)
     show_export:       bpy.props.BoolProperty(name="Export", default=False)
+    export_engine:     bpy.props.EnumProperty(
+                           name="Engine",
+                           items=[('UNREAL','Unreal',''), ('UNITY','Unity',''), ('GODOT','Godot','')],
+                           default='UNREAL',
+                           update=_on_engine_changed,
+                       )
+    export_format:     bpy.props.EnumProperty(
+                           name="Format",
+                           items=[('FBX','FBX',''), ('GLTF','glTF','')],
+                           default='FBX',
+                       )
+    scale_on_export:   bpy.props.BoolProperty(
+                           name="Scale on Export",
+                           default=True,
+                           description="When checked the rig will be exported out at 100x the scale to match Blender's scaling.",
+                       )
+    export_front_axis: bpy.props.EnumProperty(
+                           name="Front Axis",
+                           items=[('X', 'X', ''), ('Y', 'Y', ''), ('Z', 'Z', '')],
+                           default='X',
+                       )
     front_axis:        bpy.props.EnumProperty(
                            name="Front Axis",
-                           items=[('X', 'X', ''), ('Y', 'Y', '')],
+                           items=[('X', 'X', ''), ('Y', 'Y', ''), ('Z', 'Z', '')],
                            default='X',
                        )
     current_rig_axis:  bpy.props.EnumProperty(
                            name="Current Rig Axis",
-                           items=[('X', 'X', ''), ('Y', 'Y', '')],
+                           items=[('X', 'X', ''), ('Y', 'Y', ''), ('Z', 'Z', '')],
                            default='X',
                        )
     parts:             bpy.props.CollectionProperty(type=RigPartItem)

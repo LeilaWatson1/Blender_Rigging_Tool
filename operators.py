@@ -155,7 +155,7 @@ class RIGTOOL_OT_create_bone(bpy.types.Operator):
         return {'FINISHED'}
 
 
-# Creates all bones for the revolver template.
+# Toggles the Revolver template UI panel open or closed.
 class RIGTOOL_OT_template_revolver(bpy.types.Operator):
     bl_idname = "rig_tool.template_revolver"
     bl_label = "Revolver"
@@ -163,11 +163,27 @@ class RIGTOOL_OT_template_revolver(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
+        props = context.scene.rig_tool
+        if not props.current_rig or props.current_rig == 'NONE':
+            return {'CANCELLED'}
+        props.show_revolver_ui = not props.show_revolver_ui
+        return {'FINISHED'}
+
+
+# Creates all bones for the revolver template using the prefix entered in the Revolver panel.
+class RIGTOOL_OT_create_revolver_template(bpy.types.Operator):
+    bl_idname = "rig_tool.create_revolver_template"
+    bl_label = "Create"
+    bl_description = "Create the revolver template with the specified name prefix"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
         props    = context.scene.rig_tool
         rig_name = props.current_rig
         if not rig_name or rig_name == 'NONE':
             return {'CANCELLED'}
-        create_revolver_template(context, rig_name)
+        create_revolver_template(context, rig_name, prefix=props.revolver_name)
+        props.show_revolver_ui = False
         return {'FINISHED'}
 
 
@@ -453,6 +469,16 @@ class RIGTOOL_OT_rename_part(bpy.types.Operator):
         return {'FINISHED'}
 
 
+# Returns the canonical 4x4 rotation from X-native space to the given front axis.
+def _axis_matrix(axis):
+    if axis == 'X':
+        return mathutils.Matrix.Identity(4)
+    elif axis == 'Y':
+        return mathutils.Matrix.Rotation(math.pi / 2, 4, 'Z')
+    else:  # 'Z'
+        return mathutils.Matrix.Rotation(-math.pi / 2, 4, 'Y')
+
+
 # Rotates the current rig to match props.front_axis, using current_rig_axis to track applied state.
 class RIGTOOL_OT_apply_front_axis(bpy.types.Operator):
     bl_idname  = "rig_tool.apply_front_axis"
@@ -468,8 +494,7 @@ class RIGTOOL_OT_apply_front_axis(bpy.types.Operator):
 
         rig_name = props.current_rig
         if rig_name and rig_name != 'NONE':
-            angle    = -math.pi / 2 if target_axis == 'X' else math.pi / 2
-            rotation = mathutils.Matrix.Rotation(angle, 4, 'Z')
+            rotation = _axis_matrix(target_axis) @ _axis_matrix(props.current_rig_axis).inverted()
             override = _get_view3d_override(context)
             armatures_visible(rig_name)
 
@@ -486,9 +511,31 @@ class RIGTOOL_OT_apply_front_axis(bpy.types.Operator):
                 with context.temp_override(**override):
                     bpy.ops.object.mode_set(mode='OBJECT')
 
+            ctrl_obj = bpy.data.objects.get(f"CTRL_{rig_name}")
+            if ctrl_obj:
+                context.view_layer.objects.active = ctrl_obj
+                with context.temp_override(**override):
+                    bpy.ops.object.mode_set(mode='POSE')
+                shape_euler_y = -math.pi / 2 if target_axis == 'Z' else 0.0
+                for pose_bone in ctrl_obj.pose.bones:
+                    pose_bone.custom_shape_rotation_euler[1] = shape_euler_y
+                with context.temp_override(**override):
+                    bpy.ops.object.mode_set(mode='OBJECT')
+
             update_rig_visibility(context, rig_name)
 
         props.current_rig_axis = target_axis
+        return {'FINISHED'}
+
+
+# Exports the current rig using the settings in the Export panel.
+class RIGTOOL_OT_export(bpy.types.Operator):
+    bl_idname  = "rig_tool.export"
+    bl_label   = "Export"
+    bl_description = "Export the current rig with the selected engine and format settings"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
         return {'FINISHED'}
 
 
@@ -520,9 +567,11 @@ classes = [
     RIGTOOL_OT_move_part,
     RIGTOOL_OT_set_parent,
     RIGTOOL_OT_apply_front_axis,
+    RIGTOOL_OT_export,
     RIGTOOL_OT_parent_to_root,
     RIGTOOL_OT_delete_part,
     RIGTOOL_OT_rename_part,
+    RIGTOOL_OT_create_revolver_template,
 ]
 
 def register():

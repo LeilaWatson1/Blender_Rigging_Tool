@@ -45,17 +45,14 @@ def _add_part(context, part_name, parent_name=""):
             props.parts.move(new_idx, insert_idx)
 
 
-# Rotates a coordinate tuple +90° around Z when front_axis is 'Y', converting X-native to Y-native.
+# Rotates a coordinate tuple to match front_axis: +90° around Z for Y, -90° around Y for Z.
 def _apply_front_axis(coord, front_axis):
     x, y, z = coord
-    return (-y, x, z) if front_axis == 'Y' else coord
-
-
-# Swaps 'X' and 'Y' axis labels when front_axis is 'Y', leaving 'Z' unchanged.
-def _apply_front_axis_str(axis, front_axis):
-    if front_axis != 'Y':
-        return axis
-    return {'X': 'Y', 'Y': 'X'}.get(axis, axis)
+    if front_axis == 'Y':
+        return (-y, x, z)
+    if front_axis == 'Z':
+        return (-z, y, x)
+    return coord
 
 
 # Returns a context override dict for the active VIEW_3D window, required by bpy.ops calls from the N-panel.
@@ -196,6 +193,8 @@ def create_base_rig(context, rig_name):
     ctrl_root_pose.custom_shape = ctrl_widget
     ctrl_root_pose.use_custom_shape_bone_size = False
     ctrl_root_pose.rotation_mode = 'QUATERNION'
+    if front_axis == 'Z':
+        ctrl_root_pose.custom_shape_rotation_euler[1] = -math.pi / 2
     ctrl_root_pose.color.palette = 'CUSTOM'
     ctrl_root_pose.color.custom.normal = (0.8, 0.0, 0.0)
     ctrl_root_pose.color.custom.select = (1.0, 0.4, 0.4)
@@ -276,6 +275,8 @@ def create_bone(context, rig_name, bone_name, is_deforming, has_control, parent_
         ctrl_pose_bone.custom_shape = ctrl_widget
         ctrl_pose_bone.use_custom_shape_bone_size = False
         ctrl_pose_bone.rotation_mode = 'QUATERNION'
+        if front_axis == 'Z':
+            ctrl_pose_bone.custom_shape_rotation_euler[1] = -math.pi / 2
         ctrl_pose_bone.color.palette = 'CUSTOM'
         ctrl_pose_bone.color.custom.normal = ctrl_color
         ctrl_pose_bone.color.custom.select = tuple(min(1.0, c + 0.4) for c in ctrl_color)
