@@ -1,7 +1,7 @@
 import bpy
 import math
 import mathutils
-from .rig_modules import create_base_rig, add_bone, create_revolver_template, create_cylinder_part, update_rig_visibility, armatures_visible, pose_update, _get_view3d_override, _unique_name
+from .rig_modules import create_base_rig, add_bone, create_revolver_template, create_cylinder_part, update_rig_visibility, restore_mode, armatures_visible, pose_update, _get_view3d_override, _unique_name
 
 # the Python functions behind your shelf buttons
 
@@ -101,6 +101,38 @@ def _set_parent(context, item, rig_name, new_parent):
     _reparent_bones(context, bone_name, rig_name, new_parent)
 
 
+# Recursively removes all objects and sub-collections in a collection, then removes the collection itself.
+def _delete_collection(collection):
+    for obj in list(collection.objects):
+        bpy.data.objects.remove(obj, do_unlink=True)
+    for child in list(collection.children):
+        _delete_collection(child)
+    bpy.data.collections.remove(collection)
+
+
+# Deletes the current rig's collection and all its contents after user confirmation.
+class RIGTOOL_OT_delete_rig(bpy.types.Operator):
+    bl_idname     = "rig_tool.delete_rig"
+    bl_label      = "Delete Rig"
+    bl_description = "Delete the current rig"
+    bl_options    = {'REGISTER', 'UNDO'}
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_confirm(self, event)
+
+    def execute(self, context):
+        props    = context.scene.rig_tool
+        rig_name = props.current_rig
+        if not rig_name or rig_name == 'NONE':
+            return {'CANCELLED'}
+        collection = bpy.data.collections.get(rig_name)
+        if collection:
+            _delete_collection(collection)
+        props.parts.clear()
+        props.active_part_index = 0
+        return {'FINISHED'}
+
+
 # Creates a new base rig with a unique name and sets it as the current rig.
 class RIGTOOL_OT_create_rig(bpy.types.Operator):
     bl_idname = "rig_tool.create_rig"
@@ -152,6 +184,7 @@ class RIGTOOL_OT_create_bone(bpy.types.Operator):
             parent_bone_name=parent,
         )
         props.show_add_bone_ui = False
+        restore_mode(context, rig_name)
         return {'FINISHED'}
 
 
@@ -184,6 +217,7 @@ class RIGTOOL_OT_create_revolver_template(bpy.types.Operator):
             return {'CANCELLED'}
         create_revolver_template(context, rig_name, prefix=props.revolver_name)
         props.show_revolver_ui = False
+        restore_mode(context, rig_name)
         return {'FINISHED'}
 
 
@@ -215,6 +249,7 @@ class RIGTOOL_OT_create_cylinder_part(bpy.types.Operator):
         parent = props.parts[props.active_part_index].name if props.parts and props.active_part_index < len(props.parts) else "root"
         create_cylinder_part(context, rig_name, parent_bone_name=parent, base_name=props.cylinder_name)
         props.show_add_cylinder_ui = False
+        restore_mode(context, rig_name)
         return {'FINISHED'}
 
 
@@ -225,6 +260,14 @@ class RIGTOOL_OT_set_mode(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     mode: bpy.props.StringProperty()
+
+    @classmethod
+    def description(cls, context, properties):
+        if properties.mode == 'OBJECT':
+            return "Exit edit/pose mode and return to Object Mode"
+        if properties.mode == 'TEMPLATE':
+            return "Switch to Template Mode to edit bone positions using the template armature"
+        return "Switch to Pose Mode to animate and pose the rig using control bones"
 
     def execute(self, context):
         props    = context.scene.rig_tool
@@ -247,13 +290,15 @@ class RIGTOOL_OT_set_mode(bpy.types.Operator):
                 context.view_layer.objects.active = ctrl_obj
                 with context.temp_override(**override):
                     bpy.ops.object.mode_set(mode='POSE')
-        else:
+        elif self.mode == 'TEMPLATE':
             update_rig_visibility(context, rig_name)
             template_obj = bpy.data.objects.get(f"TEMPLATE_{rig_name}")
             if template_obj:
                 context.view_layer.objects.active = template_obj
                 with context.temp_override(**override):
                     bpy.ops.object.mode_set(mode='EDIT')
+        else:  # OBJECT
+            update_rig_visibility(context, rig_name)
 
         return {'FINISHED'}
 
@@ -265,6 +310,12 @@ class RIGTOOL_OT_move_part(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     direction: bpy.props.EnumProperty(items=[('UP', 'Up', ''), ('DOWN', 'Down', '')])
+
+    @classmethod
+    def description(cls, context, properties):
+        if properties.direction == 'UP':
+            return "Move the selected part up in the list"
+        return "Move the selected part down in the list"
 
     def execute(self, context):
         props = context.scene.rig_tool
@@ -291,15 +342,17 @@ class RIGTOOL_OT_move_part(bpy.types.Operator):
             item.parent_name = new_parent
             _recalculate_indents(props)
             _reparent_bones(context, item.name, props.current_rig, new_parent)
+            restore_mode(context, props.current_rig)
 
         return {'FINISHED'}
 
 
 # Sets the parent of the selected part to the value chosen in the Parent search field.
 class RIGTOOL_OT_set_parent(bpy.types.Operator):
-    bl_idname = "rig_tool.set_parent"
-    bl_label = "Set Parent"
-    bl_options = {'REGISTER', 'UNDO'}
+    bl_idname     = "rig_tool.set_parent"
+    bl_label      = "Set Parent"
+    bl_description = "Set the selected part's parent to the part chosen in the Parent field"
+    bl_options    = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         props = context.scene.rig_tool
@@ -310,14 +363,16 @@ class RIGTOOL_OT_set_parent(bpy.types.Operator):
         if not new_parent or new_parent == item.name:
             return {'CANCELLED'}
         _set_parent(context, item, props.current_rig, new_parent)
+        restore_mode(context, props.current_rig)
         return {'FINISHED'}
 
 
 # Deletes the selected part from the list and all three armatures, re-parenting its children to its former parent.
 class RIGTOOL_OT_delete_part(bpy.types.Operator):
-    bl_idname = "rig_tool.delete_part"
-    bl_label = "Delete"
-    bl_options = {'REGISTER', 'UNDO'}
+    bl_idname     = "rig_tool.delete_part"
+    bl_label      = "Delete"
+    bl_description = "Delete the selected part and its bones from the rig, re-parenting any children to its former parent"
+    bl_options    = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         props = context.scene.rig_tool
@@ -384,14 +439,16 @@ class RIGTOOL_OT_delete_part(bpy.types.Operator):
         props.active_part_index = min(props.active_part_index, len(props.parts) - 1)
 
         update_rig_visibility(context, rig_name)
+        restore_mode(context, rig_name)
         return {'FINISHED'}
 
 
 # Renames the selected part in the parts list and across all three armatures.
 class RIGTOOL_OT_rename_part(bpy.types.Operator):
-    bl_idname = "rig_tool.rename_part"
-    bl_label = "Rename"
-    bl_options = {'REGISTER', 'UNDO'}
+    bl_idname     = "rig_tool.rename_part"
+    bl_label      = "Rename"
+    bl_description = "Rename the selected part using the text entered in the name field"
+    bl_options    = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         props = context.scene.rig_tool
@@ -466,6 +523,7 @@ class RIGTOOL_OT_rename_part(bpy.types.Operator):
                 part.parent_name = new_name
 
         update_rig_visibility(context, rig_name)
+        restore_mode(context, rig_name)
         return {'FINISHED'}
 
 
@@ -473,16 +531,16 @@ class RIGTOOL_OT_rename_part(bpy.types.Operator):
 def _axis_matrix(axis):
     if axis == 'X':
         return mathutils.Matrix.Identity(4)
-    elif axis == 'Y':
+    else:  # 'Y'
         return mathutils.Matrix.Rotation(math.pi / 2, 4, 'Z')
-    else:  # 'Z'
-        return mathutils.Matrix.Rotation(-math.pi / 2, 4, 'Y')
+
 
 # Rotates the current rig to match props.front_axis, using current_rig_axis to track applied state.
 class RIGTOOL_OT_apply_front_axis(bpy.types.Operator):
-    bl_idname  = "rig_tool.apply_front_axis"
-    bl_label   = "Apply"
-    bl_options = {'REGISTER', 'UNDO'}
+    bl_idname     = "rig_tool.apply_front_axis"
+    bl_label      = "Apply"
+    bl_description = "Rotate the current rig to face the selected front axis"
+    bl_options    = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         props       = context.scene.rig_tool
@@ -491,7 +549,7 @@ class RIGTOOL_OT_apply_front_axis(bpy.types.Operator):
             return {'FINISHED'}
         rig_name = props.current_rig
         if rig_name and rig_name != 'NONE':
-            rotation = _axis_matrix(to_axis) @ _axis_matrix(from_axis).inverted()
+            rotation = _axis_matrix(target_axis) @ _axis_matrix(props.current_rig_axis).inverted()
             override  = _get_view3d_override(context)
             armatures_visible(rig_name)
             for prefix in ("DEF_", "CTRL_", "TEMPLATE_"):
@@ -506,26 +564,18 @@ class RIGTOOL_OT_apply_front_axis(bpy.types.Operator):
                     bone.tail = rotation @ bone.tail
                 with context.temp_override(**override):
                     bpy.ops.object.mode_set(mode='OBJECT')
-            ctrl_obj = bpy.data.objects.get(f"CTRL_{rig_name}")
-            if ctrl_obj:
-                context.view_layer.objects.active = ctrl_obj
-                with context.temp_override(**override):
-                    bpy.ops.object.mode_set(mode='POSE')
-                shape_euler_y = -math.pi / 2 if to_axis == 'Z' else 0.0
-                for pose_bone in ctrl_obj.pose.bones:
-                    pose_bone.custom_shape_rotation_euler[1] = shape_euler_y
-                with context.temp_override(**override):
-                    bpy.ops.object.mode_set(mode='OBJECT')
             update_rig_visibility(context, rig_name)
         props.current_rig_axis = target_axis
+        restore_mode(context, rig_name)
         return {'FINISHED'}
 
 
 # Opens a file browser and exports only the DEF armature, rotating to export_front_axis if needed then restoring.
 class RIGTOOL_OT_export(bpy.types.Operator):
-    bl_idname    = "rig_tool.export"
-    bl_label     = "Export Rig"
-    bl_options   = {'REGISTER'}
+    bl_idname     = "rig_tool.export"
+    bl_label      = "Export Rig"
+    bl_description = "Export the current rig's DEF armature using the selected engine and format settings"
+    bl_options    = {'REGISTER'}
 
     def execute(self, context):
         props    = context.scene.rig_tool
@@ -559,8 +609,9 @@ class RIGTOOL_OT_export(bpy.types.Operator):
 # Parents the selected part directly to root, removing it from any sub-hierarchy.
 class RIGTOOL_OT_parent_to_root(bpy.types.Operator):
     bl_idname = "rig_tool.parent_to_root"
-    bl_label = "To Root"
-    bl_options = {'REGISTER', 'UNDO'}
+    bl_label      = "To Root"
+    bl_description = "Remove the selected part from its current parent and attach it directly to the rig root"
+    bl_options    = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         props = context.scene.rig_tool
@@ -570,6 +621,7 @@ class RIGTOOL_OT_parent_to_root(bpy.types.Operator):
         if item.parent_name == "root":
             return {'CANCELLED'}
         _set_parent(context, item, props.current_rig, "root")
+        restore_mode(context, props.current_rig)
         return {'FINISHED'}
 
 
@@ -589,6 +641,7 @@ classes = [
     RIGTOOL_OT_delete_part,
     RIGTOOL_OT_rename_part,
     RIGTOOL_OT_create_revolver_template,
+    RIGTOOL_OT_delete_rig,
 ]
 
 def register():

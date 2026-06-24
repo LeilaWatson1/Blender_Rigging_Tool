@@ -38,6 +38,8 @@ class VIEW3D_PT_rig_tool(bpy.types.Panel):
         row.prop(props, "front_axis", text="")
         row.operator("rig_tool.apply_front_axis", text="Apply")
 
+        layout.operator("rig_tool.delete_rig", text="Delete Rig")
+
         row = layout.row()
         row.prop(props, "show_parts_list",
                  icon='TRIA_DOWN' if props.show_parts_list else 'TRIA_RIGHT',
@@ -64,6 +66,8 @@ class VIEW3D_PT_rig_tool(bpy.types.Panel):
                 box.operator("rig_tool.delete_part")
 
         row = layout.row(align=True)
+        op = row.operator("rig_tool.set_mode", text="Object Mode", depress=(props.mode == 'OBJECT'))
+        op.mode = 'OBJECT'
         op = row.operator("rig_tool.set_mode", text="Template Mode", depress=(props.mode == 'TEMPLATE'))
         op.mode = 'TEMPLATE'
         op = row.operator("rig_tool.set_mode", text="Pose Mode", depress=(props.mode == 'POSE'))

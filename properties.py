@@ -124,10 +124,11 @@ class RigToolProperties(bpy.types.PropertyGroup):
     mode: bpy.props.EnumProperty(
         name="Mode",
         items=[
+            ('OBJECT', "Object Mode", ""),
             ('TEMPLATE', "Template Mode", ""),
             ('POSE', "Pose Mode", ""),
         ],
-        default='TEMPLATE',
+        default='OBJECT',
     )
     show_parts:        bpy.props.BoolProperty(name="Parts", default=False)
     show_export:       bpy.props.BoolProperty(name="Export", default=False)
@@ -150,12 +151,12 @@ class RigToolProperties(bpy.types.PropertyGroup):
                        )
     front_axis:        bpy.props.EnumProperty(
                            name="Front Axis",
-                           items=[('X', 'X', ''), ('Y', 'Y', ''), ('Z', 'Z', '')],
+                           items=[('X', 'X', ''), ('Y', 'Y', '')],
                            default='X',
                        )
     current_rig_axis:  bpy.props.EnumProperty(
                            name="Current Rig Axis",
-                           items=[('X', 'X', ''), ('Y', 'Y', ''), ('Z', 'Z', '')],
+                           items=[('X', 'X', ''), ('Y', 'Y', '')],
                            default='X',
                        )
     parts:             bpy.props.CollectionProperty(type=RigPartItem)

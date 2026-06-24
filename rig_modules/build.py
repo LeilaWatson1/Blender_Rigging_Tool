@@ -45,14 +45,10 @@ def _add_part(context, part_name, parent_name=""):
             props.parts.move(new_idx, insert_idx)
 
 
-# Rotates a coordinate tuple to match front_axis: +90° around Z for Y, -90° around Y for Z.
+# Rotates a coordinate tuple +90° around Z when front_axis is 'Y', converting X-native to Y-native.
 def _apply_front_axis(coord, front_axis):
     x, y, z = coord
-    if front_axis == 'Y':
-        return (-y, x, z)
-    if front_axis == 'Z':
-        return (-z, y, x)
-    return coord
+    return (-y, x, z) if front_axis == 'Y' else coord
 
 
 # Returns a context override dict for the active VIEW_3D window, required by bpy.ops calls from the N-panel.
@@ -96,6 +92,25 @@ def update_rig_visibility(context, rig_name):
         for bone in ctrl_obj.data.bones:
             if bone.name.startswith("HIDE_"):
                 bone.hide = True
+
+
+# Puts Blender back into the correct edit mode for the current tool mode after an operation finishes.
+def restore_mode(context, rig_name):
+    mode     = context.scene.rig_tool.mode
+    override = _get_view3d_override(context)
+    if mode == 'TEMPLATE':
+        template_obj = bpy.data.objects.get(f"TEMPLATE_{rig_name}")
+        if template_obj:
+            context.view_layer.objects.active = template_obj
+            with context.temp_override(**override):
+                bpy.ops.object.mode_set(mode='EDIT')
+    elif mode == 'POSE':
+        ctrl_obj = bpy.data.objects.get(f"CTRL_{rig_name}")
+        if ctrl_obj:
+            context.view_layer.objects.active = ctrl_obj
+            with context.temp_override(**override):
+                bpy.ops.object.mode_set(mode='POSE')
+    # 'OBJECT': update_rig_visibility already leaves Blender in object mode
 
 
 # Creates a TEMP_ bone in the template armature at the given position, with optional parent/child linking.
@@ -193,8 +208,6 @@ def create_base_rig(context, rig_name):
     ctrl_root_pose.custom_shape = ctrl_widget
     ctrl_root_pose.use_custom_shape_bone_size = False
     ctrl_root_pose.rotation_mode = 'QUATERNION'
-    if front_axis == 'Z':
-        ctrl_root_pose.custom_shape_rotation_euler[1] = -math.pi / 2
     ctrl_root_pose.color.palette = 'CUSTOM'
     ctrl_root_pose.color.custom.normal = (0.8, 0.0, 0.0)
     ctrl_root_pose.color.custom.select = (1.0, 0.4, 0.4)
@@ -217,7 +230,7 @@ def create_base_rig(context, rig_name):
 
 # Creates DEF_ and/or CTRL_ bones for a named part, sets up the widget, assigns the Copy Transforms
 # constraint linking DEF to CTRL, registers the part in the UI list, and returns the actual name used.
-def create_bone(context, rig_name, bone_name, is_deforming, has_control, parent_bone_name="root", ctrl_radius=0.5, ctrl_axis='Z', bone_head=(0.0, 0.0, 0.0), bone_tail=(0.0, 0.1, 0.0), ctrl_offset=(0.0, 0.0, 0.0), widget_type='circle', ctrl_shape_rotation=0.0, ctrl_color=(0.8, 0.0, 0.0), ctrl_widget_rotation_z=0.0):
+def create_bone(context, rig_name, bone_name, is_deforming, has_control, parent_bone_name="root", ctrl_radius=0.5, ctrl_axis='Z', bone_head=(0.0, 0.0, 0.0), bone_tail=(0.1, 0.0, 0.0), ctrl_offset=(0.0, 0.0, 0.0), widget_type='circle', ctrl_shape_rotation=0.0, ctrl_color=(0.8, 0.0, 0.0), ctrl_widget_rotation_z=0.0):
     def_obj, ctrl_obj, template_obj = create_base_rig(context, rig_name)
     override = _get_view3d_override(context)
 
@@ -275,8 +288,6 @@ def create_bone(context, rig_name, bone_name, is_deforming, has_control, parent_
         ctrl_pose_bone.custom_shape = ctrl_widget
         ctrl_pose_bone.use_custom_shape_bone_size = False
         ctrl_pose_bone.rotation_mode = 'QUATERNION'
-        if front_axis == 'Z':
-            ctrl_pose_bone.custom_shape_rotation_euler[1] = -math.pi / 2
         ctrl_pose_bone.color.palette = 'CUSTOM'
         ctrl_pose_bone.color.custom.normal = ctrl_color
         ctrl_pose_bone.color.custom.select = tuple(min(1.0, c + 0.4) for c in ctrl_color)
