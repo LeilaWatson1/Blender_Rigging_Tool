@@ -478,7 +478,6 @@ def _axis_matrix(axis):
     else:  # 'Z'
         return mathutils.Matrix.Rotation(-math.pi / 2, 4, 'Y')
 
-
 # Rotates the current rig to match props.front_axis, using current_rig_axis to track applied state.
 class RIGTOOL_OT_apply_front_axis(bpy.types.Operator):
     bl_idname  = "rig_tool.apply_front_axis"
@@ -488,16 +487,13 @@ class RIGTOOL_OT_apply_front_axis(bpy.types.Operator):
     def execute(self, context):
         props       = context.scene.rig_tool
         target_axis = props.front_axis
-
         if props.current_rig_axis == target_axis:
             return {'FINISHED'}
-
         rig_name = props.current_rig
         if rig_name and rig_name != 'NONE':
-            rotation = _axis_matrix(target_axis) @ _axis_matrix(props.current_rig_axis).inverted()
-            override = _get_view3d_override(context)
+            rotation = _axis_matrix(to_axis) @ _axis_matrix(from_axis).inverted()
+            override  = _get_view3d_override(context)
             armatures_visible(rig_name)
-
             for prefix in ("DEF_", "CTRL_", "TEMPLATE_"):
                 obj = bpy.data.objects.get(f"{prefix}{rig_name}")
                 if not obj:
@@ -510,32 +506,53 @@ class RIGTOOL_OT_apply_front_axis(bpy.types.Operator):
                     bone.tail = rotation @ bone.tail
                 with context.temp_override(**override):
                     bpy.ops.object.mode_set(mode='OBJECT')
-
             ctrl_obj = bpy.data.objects.get(f"CTRL_{rig_name}")
             if ctrl_obj:
                 context.view_layer.objects.active = ctrl_obj
                 with context.temp_override(**override):
                     bpy.ops.object.mode_set(mode='POSE')
-                shape_euler_y = -math.pi / 2 if target_axis == 'Z' else 0.0
+                shape_euler_y = -math.pi / 2 if to_axis == 'Z' else 0.0
                 for pose_bone in ctrl_obj.pose.bones:
                     pose_bone.custom_shape_rotation_euler[1] = shape_euler_y
                 with context.temp_override(**override):
                     bpy.ops.object.mode_set(mode='OBJECT')
-
             update_rig_visibility(context, rig_name)
-
         props.current_rig_axis = target_axis
         return {'FINISHED'}
 
 
-# Exports the current rig using the settings in the Export panel.
+# Opens a file browser and exports only the DEF armature, rotating to export_front_axis if needed then restoring.
 class RIGTOOL_OT_export(bpy.types.Operator):
-    bl_idname  = "rig_tool.export"
-    bl_label   = "Export"
-    bl_description = "Export the current rig with the selected engine and format settings"
-    bl_options = {'REGISTER', 'UNDO'}
+    bl_idname    = "rig_tool.export"
+    bl_label     = "Export Rig"
+    bl_options   = {'REGISTER'}
 
     def execute(self, context):
+        props    = context.scene.rig_tool
+        rig_name = props.current_rig
+
+        if not rig_name or rig_name == 'NONE':
+            self.report({'ERROR'}, "No rig selected")
+            return {'CANCELLED'}
+
+        def_obj = bpy.data.objects.get(f"DEF_{rig_name}")
+        if not def_obj:
+            self.report({'ERROR'}, f"DEF_{rig_name} not found")
+            return {'CANCELLED'}
+
+        bpy.ops.object.select_all(action='DESELECT')
+        def_obj.select_set(True)
+        context.view_layer.objects.active = def_obj
+
+        if props.export_format == 'FBX':
+            if props.export_engine == 'UNITY':
+                bpy.ops.export_scene.fbx('INVOKE_DEFAULT', use_selection=True,
+                                         axis_forward='-Y', axis_up='Z')
+            else:
+                bpy.ops.export_scene.fbx('INVOKE_DEFAULT', use_selection=True)
+        else:
+            bpy.ops.export_scene.gltf('INVOKE_DEFAULT', use_selection=True)
+
         return {'FINISHED'}
 
 

@@ -124,10 +124,6 @@ class VIEW3D_PT_rig_tool(bpy.types.Panel):
             if props.export_engine == 'UNREAL':
                 box.prop(props, "scale_on_export")
 
-            split = box.split(factor=0.35)
-            split.label(text="Front Axis")
-            split.prop(props, "export_front_axis", text="")
-
             box.operator("rig_tool.export", text="Export")
 
 
