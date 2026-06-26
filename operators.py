@@ -1,7 +1,7 @@
 import bpy
 import math
 import mathutils
-from .rig_modules import create_base_rig, add_bone, create_revolver_template, create_cylinder_part, update_rig_visibility, restore_mode, armatures_visible, pose_update, _get_view3d_override, _unique_name
+from .rig_modules import create_base_rig, add_bone, create_revolver_template, create_pistol_template, create_cylinder_part, update_rig_visibility, restore_mode, armatures_visible, pose_update, _get_view3d_override, _unique_name
 
 # the Python functions behind your shelf buttons
 
@@ -625,6 +625,39 @@ class RIGTOOL_OT_parent_to_root(bpy.types.Operator):
         return {'FINISHED'}
 
 
+# Toggles the Pistol template UI panel open or closed.
+class RIGTOOL_OT_template_pistol(bpy.types.Operator):
+    bl_idname     = "rig_tool.template_pistol"
+    bl_label      = "Pistol"
+    bl_description = "Contains: local, trigger, mag, and slide parts"
+    bl_options    = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        props = context.scene.rig_tool
+        if not props.current_rig or props.current_rig == 'NONE':
+            return {'CANCELLED'}
+        props.show_pistol_ui = not props.show_pistol_ui
+        return {'FINISHED'}
+
+
+# Creates all bones for the pistol template using the prefix entered in the Pistol panel.
+class RIGTOOL_OT_create_pistol_template(bpy.types.Operator):
+    bl_idname     = "rig_tool.create_pistol_template"
+    bl_label      = "Create"
+    bl_description = "Create the pistol template with the specified name prefix"
+    bl_options    = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        props    = context.scene.rig_tool
+        rig_name = props.current_rig
+        if not rig_name or rig_name == 'NONE':
+            return {'CANCELLED'}
+        create_pistol_template(context, rig_name, prefix=props.pistol_name)
+        props.show_pistol_ui = False
+        restore_mode(context, rig_name)
+        return {'FINISHED'}
+
+
 classes = [
     RIGTOOL_OT_create_rig,
     RIGTOOL_OT_add_bone,
@@ -641,6 +674,8 @@ classes = [
     RIGTOOL_OT_delete_part,
     RIGTOOL_OT_rename_part,
     RIGTOOL_OT_create_revolver_template,
+    RIGTOOL_OT_template_pistol,
+    RIGTOOL_OT_create_pistol_template,
     RIGTOOL_OT_delete_rig,
 ]
 

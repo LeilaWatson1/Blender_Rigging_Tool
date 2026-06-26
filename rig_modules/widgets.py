@@ -152,3 +152,41 @@ def create_circle_arrow_widget(name, collection, radius=1.0, axis='Z', offset=(0
     obj = bpy.data.objects.new(name, mesh)
     collection.objects.link(obj)
     return obj
+
+
+# Creates a straight line with arrowheads at both ends, used as a bone custom shape for linear slide controls.
+def create_double_arrow_widget(name, collection, length=0.1, axis='Z', offset=(0.0, 0.0, 0.0), shape_rotation=0.0):
+    mesh = bpy.data.meshes.new(name)
+    bm = bmesh.new()
+
+    half       = length / 2
+    barb_size  = length * 0.15
+    barb_angle = math.radians(35)
+
+    def add_vert(x, y):
+        rx, ry = _rotate_2d(x, y, shape_rotation)
+        return bm.verts.new(_apply_axis(rx, ry, axis, offset))
+
+    def add_arrowhead(tip_vert, tip_x, tip_y, dir_x, dir_y):
+        bx, by = -dir_x, -dir_y
+        c, s = math.cos(barb_angle), math.sin(barb_angle)
+        b1 = add_vert(tip_x + (c * bx - s * by) * barb_size,
+                      tip_y + (s * bx + c * by) * barb_size)
+        b2 = add_vert(tip_x + (c * bx + s * by) * barb_size,
+                      tip_y + (-s * bx + c * by) * barb_size)
+        bm.edges.new((tip_vert, b1))
+        bm.edges.new((tip_vert, b2))
+
+    left_v  = add_vert(-half, 0.0)
+    right_v = add_vert( half, 0.0)
+    bm.edges.new((left_v, right_v))
+
+    add_arrowhead(left_v,  -half, 0.0, -1.0, 0.0)
+    add_arrowhead(right_v,  half, 0.0,  1.0, 0.0)
+
+    bm.to_mesh(mesh)
+    bm.free()
+
+    obj = bpy.data.objects.new(name, mesh)
+    collection.objects.link(obj)
+    return obj

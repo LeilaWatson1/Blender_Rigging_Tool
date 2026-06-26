@@ -86,6 +86,13 @@ class VIEW3D_PT_rig_tool(bpy.types.Panel):
                 split.label(text="Name")
                 split.prop(props, "revolver_name", text="")
                 inner.operator("rig_tool.create_revolver_template")
+            box.operator("rig_tool.template_pistol", text="Pistol")
+            if props.show_pistol_ui:
+                inner = box.box()
+                split = inner.split(factor=0.50)
+                split.label(text="Name")
+                split.prop(props, "pistol_name", text="")
+                inner.operator("rig_tool.create_pistol_template")
 
         row = layout.row()
         row.prop(props, "show_parts",

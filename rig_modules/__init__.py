@@ -12,7 +12,7 @@ from .build import (
     _apply_front_axis,
 )
 from .part_templates import create_cylinder_part
-from .templates import create_revolver_template
+from .templates import create_revolver_template, create_pistol_template
 
 
 # Moves CTRL/HIDE bones to match template positions, then moves DEF bones to follow their

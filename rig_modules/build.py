@@ -1,7 +1,7 @@
 import bpy
 import math
 import mathutils
-from .widgets import create_circle_widget, create_arc_arrow_widget, create_circle_arrow_widget
+from .widgets import create_circle_widget, create_arc_arrow_widget, create_circle_arrow_widget, create_double_arrow_widget
 
 
 # Returns a unique name by checking existing rigs (name_type='rig') or parts (name_type='part'), appending _001, _002 etc. if needed.
@@ -261,6 +261,8 @@ def create_bone(context, rig_name, bone_name, is_deforming, has_control, parent_
             ctrl_widget = create_arc_arrow_widget(f"WGT_{rig_name}_{bone_name}", wgt_collection, radius=ctrl_radius, axis=ctrl_axis, offset=ctrl_offset, shape_rotation=ctrl_shape_rotation)
         elif widget_type == 'circle_arrow':
             ctrl_widget = create_circle_arrow_widget(f"WGT_{rig_name}_{bone_name}", wgt_collection, radius=ctrl_radius, axis=ctrl_axis, offset=ctrl_offset, shape_rotation=ctrl_shape_rotation)
+        elif widget_type == 'double_arrow':
+            ctrl_widget = create_double_arrow_widget(f"WGT_{rig_name}_{bone_name}", wgt_collection, length=ctrl_radius, axis=ctrl_axis, offset=ctrl_offset, shape_rotation=ctrl_shape_rotation)
         else:
             ctrl_widget = create_circle_widget(f"WGT_{rig_name}_{bone_name}", wgt_collection, radius=ctrl_radius, axis=ctrl_axis, offset=ctrl_offset, shape_rotation=ctrl_shape_rotation)
 

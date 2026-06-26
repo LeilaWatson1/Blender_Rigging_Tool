@@ -111,6 +111,13 @@ class RigToolProperties(bpy.types.PropertyGroup):
         name="Name Prefix",
         default="",
     )
+    show_pistol_ui: bpy.props.BoolProperty(
+        default=False,
+    )
+    pistol_name: bpy.props.StringProperty(
+        name="Name Prefix",
+        default="",
+    )
     show_add_bone_ui: bpy.props.BoolProperty(
         default=False,
     )
