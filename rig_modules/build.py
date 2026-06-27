@@ -266,6 +266,13 @@ def create_bone(context, rig_name, bone_name, is_deforming, has_control, parent_
         else:
             ctrl_widget = create_circle_widget(f"WGT_{rig_name}_{bone_name}", wgt_collection, radius=ctrl_radius, axis=ctrl_axis, offset=ctrl_offset, shape_rotation=ctrl_shape_rotation)
 
+        ctrl_widget["widget_type"]    = widget_type
+        ctrl_widget["ctrl_axis"]      = ctrl_axis
+        ctrl_widget["ctrl_offset"]    = list(ctrl_offset)
+        ctrl_widget["shape_rotation"] = ctrl_shape_rotation
+        ctrl_widget["ctrl_color"]     = list(ctrl_color)
+        ctrl_widget["ctrl_radius"]    = ctrl_radius
+
         if ctrl_widget_rotation_z != 0.0:
             rot3   = mathutils.Matrix.Rotation(ctrl_widget_rotation_z, 3, 'Z')
             pivot  = mathutils.Vector(ctrl_offset)

@@ -1,7 +1,7 @@
 import bpy
 import math
 import mathutils
-from .rig_modules import create_base_rig, add_bone, create_revolver_template, create_pistol_template, create_cylinder_part, update_rig_visibility, restore_mode, armatures_visible, pose_update, _get_view3d_override, _unique_name
+from .rig_modules import create_base_rig, add_bone, create_revolver_template, create_pistol_template, create_cylinder_part, update_rig_visibility, restore_mode, armatures_visible, pose_update, _get_view3d_override, _unique_name, _apply_front_axis
 
 # the Python functions behind your shelf buttons
 
@@ -182,8 +182,8 @@ class RIGTOOL_OT_create_bone(bpy.types.Operator):
             props.is_deforming,
             props.has_control,
             parent_bone_name=parent,
+            widget_type=props.bone_widget,
         )
-        props.show_add_bone_ui = False
         restore_mode(context, rig_name)
         return {'FINISHED'}
 
@@ -216,7 +216,6 @@ class RIGTOOL_OT_create_revolver_template(bpy.types.Operator):
         if not rig_name or rig_name == 'NONE':
             return {'CANCELLED'}
         create_revolver_template(context, rig_name, prefix=props.revolver_name)
-        props.show_revolver_ui = False
         restore_mode(context, rig_name)
         return {'FINISHED'}
 
@@ -248,7 +247,6 @@ class RIGTOOL_OT_create_cylinder_part(bpy.types.Operator):
             return {'CANCELLED'}
         parent = props.parts[props.active_part_index].name if props.parts and props.active_part_index < len(props.parts) else "root"
         create_cylinder_part(context, rig_name, parent_bone_name=parent, base_name=props.cylinder_name)
-        props.show_add_cylinder_ui = False
         restore_mode(context, rig_name)
         return {'FINISHED'}
 
@@ -653,9 +651,128 @@ class RIGTOOL_OT_create_pistol_template(bpy.types.Operator):
         if not rig_name or rig_name == 'NONE':
             return {'CANCELLED'}
         create_pistol_template(context, rig_name, prefix=props.pistol_name)
-        props.show_pistol_ui = False
         restore_mode(context, rig_name)
         return {'FINISHED'}
+
+
+# Mutable flag — checked by _on_widget_edit_changed in properties.py to suppress
+# re-entrant apply calls while _load_widget_settings is bulk-setting the edit fields.
+_widget_load_guard = [False]
+
+
+# Reads the selected bone's current widget metadata and populates the Widgets
+# panel edit fields without triggering the apply callback.
+def _load_widget_settings(context):
+    props    = context.scene.rig_tool
+    rig_name = props.current_rig
+    if not rig_name or rig_name == 'NONE':
+        return
+    if not props.parts or props.active_part_index >= len(props.parts):
+        return
+
+    bone_name = props.parts[props.active_part_index].name
+    wgt       = bpy.data.objects.get(f"WGT_{rig_name}_{bone_name}")
+
+    _widget_load_guard[0] = True
+    try:
+        if wgt:
+            props.edit_widget         = wgt.get("widget_type", "circle")
+            props.edit_ctrl_axis      = wgt.get("ctrl_axis", "Z")
+            offset                    = wgt.get("ctrl_offset", [0.0, 0.0, 0.0])
+            props.edit_ctrl_offset_x  = float(offset[0])
+            props.edit_ctrl_offset_y  = float(offset[1])
+            props.edit_ctrl_offset_z  = float(offset[2])
+            props.edit_shape_rotation = float(wgt.get("shape_rotation", 0.0))
+            props.edit_ctrl_radius    = float(wgt.get("ctrl_radius", 0.1))
+            stored                    = tuple(float(c) for c in wgt.get("ctrl_color", [0.8, 0.0, 0.0]))
+            props.edit_ctrl_color     = min(_WIDGET_COLOR_MAP, key=lambda k: sum((a - b) ** 2 for a, b in zip(_WIDGET_COLOR_MAP[k], stored)))
+    finally:
+        _widget_load_guard[0] = False
+
+
+_WIDGET_COLOR_MAP = {
+    'RED':    (0.8, 0.0, 0.0),
+    'ORANGE': (0.8, 0.4, 0.0),
+    'YELLOW': (0.8, 0.8, 0.0),
+    'GREEN':  (0.0, 0.8, 0.0),
+    'BLUE':   (0.0, 0.0, 0.8),
+    'PURPLE': (0.5, 0.0, 0.8),
+    'WHITE':  (1.0, 1.0, 1.0),
+}
+
+
+# Applies all Widgets panel values to the selected bone's control widget, positions, and color.
+# Called automatically by property update callbacks whenever any edit field changes.
+def _apply_widget_settings(context):
+    from .rig_modules.widgets import (
+        create_circle_widget, create_arc_arrow_widget,
+        create_circle_arrow_widget, create_double_arrow_widget,
+    )
+    props    = context.scene.rig_tool
+    rig_name = props.current_rig
+    if not rig_name or rig_name == 'NONE':
+        return
+    if not props.parts or props.active_part_index >= len(props.parts):
+        return
+
+    bone_name      = props.parts[props.active_part_index].name
+    ctrl_bone_name = f"CTRL_{bone_name}"
+
+    offset         = (props.edit_ctrl_offset_x, props.edit_ctrl_offset_y, props.edit_ctrl_offset_z)
+    shape_rotation = props.edit_shape_rotation
+    ctrl_color     = _WIDGET_COLOR_MAP[props.edit_ctrl_color]
+    override       = _get_view3d_override(context)
+    armatures_visible(rig_name)
+
+    ctrl_obj       = bpy.data.objects.get(f"CTRL_{rig_name}")
+    wgt_collection = bpy.data.collections.get(f"WGTS_{rig_name}")
+
+    if not ctrl_obj:
+        update_rig_visibility(context, rig_name)
+        restore_mode(context, rig_name)
+        return
+
+    wgt_name    = f"WGT_{rig_name}_{bone_name}"
+    old_wgt     = bpy.data.objects.get(wgt_name)
+    ctrl_radius = props.edit_ctrl_radius
+
+    # Replace widget mesh with new settings.
+    if wgt_collection:
+        if old_wgt:
+            bpy.data.objects.remove(old_wgt, do_unlink=True)
+        axis  = props.edit_ctrl_axis
+        wtype = props.edit_widget
+        if wtype == 'arc_arrow':
+            new_wgt = create_arc_arrow_widget(wgt_name, wgt_collection, radius=ctrl_radius, axis=axis, offset=offset, shape_rotation=shape_rotation)
+        elif wtype == 'circle_arrow':
+            new_wgt = create_circle_arrow_widget(wgt_name, wgt_collection, radius=ctrl_radius, axis=axis, offset=offset, shape_rotation=shape_rotation)
+        elif wtype == 'double_arrow':
+            new_wgt = create_double_arrow_widget(wgt_name, wgt_collection, length=ctrl_radius, axis=axis, offset=offset, shape_rotation=shape_rotation)
+        else:
+            new_wgt = create_circle_widget(wgt_name, wgt_collection, radius=ctrl_radius, axis=axis, offset=offset, shape_rotation=shape_rotation)
+
+        new_wgt["widget_type"]    = wtype
+        new_wgt["ctrl_axis"]      = axis
+        new_wgt["ctrl_offset"]    = list(offset)
+        new_wgt["shape_rotation"] = shape_rotation
+        new_wgt["ctrl_color"]     = list(ctrl_color)
+        new_wgt["ctrl_radius"]    = ctrl_radius
+
+        context.view_layer.objects.active = ctrl_obj
+        with context.temp_override(**override):
+            bpy.ops.object.mode_set(mode='POSE')
+        if ctrl_bone_name in ctrl_obj.pose.bones:
+            pb = ctrl_obj.pose.bones[ctrl_bone_name]
+            pb.custom_shape = new_wgt
+            pb.color.palette = 'CUSTOM'
+            pb.color.custom.normal = ctrl_color
+            pb.color.custom.select = tuple(min(1.0, c + 0.4) for c in ctrl_color)
+            pb.color.custom.active = tuple(min(1.0, c + 0.6) for c in ctrl_color)
+        with context.temp_override(**override):
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+    update_rig_visibility(context, rig_name)
+    restore_mode(context, rig_name)
 
 
 classes = [

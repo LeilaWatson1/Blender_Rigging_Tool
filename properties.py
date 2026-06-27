@@ -7,10 +7,21 @@ _rig_enum_cache = []
 
 
 # Auto-fills parent_selector with the selected part's current parent when the list selection changes.
+# Also refreshes the Widgets panel fields if it is currently open.
 def _on_part_selected(self, context):
     props = context.scene.rig_tool
     if props.parts and props.active_part_index < len(props.parts):
         props.parent_selector = props.parts[props.active_part_index].parent_name
+    if props.show_edit_widget_ui:
+        from .operators import _load_widget_settings
+        _load_widget_settings(context)
+
+
+# Loads the selected bone's widget settings into the edit fields when the Widgets panel is opened.
+def _on_show_edit_widget_changed(self, context):
+    if self.show_edit_widget_ui:
+        from .operators import _load_widget_settings
+        _load_widget_settings(context)
 
 
 # Builds the enum items list from all DEF_ armatures present in the scene.
@@ -30,6 +41,20 @@ def _get_rig_items(self, context):
 # Sets scene unit scale to 0.01 (cm) when checked, restoring to 1.0 when unchecked.
 def _on_scale_on_export_changed(self, context):
     context.scene.unit_settings.scale_length = 0.01 if self.scale_on_export else 1.0
+
+
+# Triggers _apply_widget_settings whenever any Widgets panel field changes.
+# Skipped while _load_widget_settings is bulk-setting the fields to avoid a re-entrant apply loop.
+def _on_widget_edit_changed(self, context):
+    from .operators import _widget_load_guard
+    if _widget_load_guard[0]:
+        return
+    if not self.current_rig or self.current_rig == 'NONE':
+        return
+    if not self.parts or self.active_part_index >= len(self.parts):
+        return
+    from .operators import _apply_widget_settings
+    _apply_widget_settings(context)
 
 
 # Sets export format to the best default for the selected engine.
@@ -99,6 +124,53 @@ class RigToolProperties(bpy.types.PropertyGroup):
     has_control: bpy.props.BoolProperty(
         name="Has Control",
         default=True,
+    )
+    bone_widget: bpy.props.EnumProperty(
+        name="Widget",
+        items=[
+            ('circle',       "Circle",       ""),
+            ('arc_arrow',    "Arc Arrow",    ""),
+            ('circle_arrow', "Circle Arrow", ""),
+            ('double_arrow', "Double Arrow", ""),
+        ],
+        default='circle',
+    )
+    show_edit_widget_ui: bpy.props.BoolProperty(name="Widgets", default=False, update=_on_show_edit_widget_changed)
+    edit_widget:         bpy.props.EnumProperty(
+        name="Widget",
+        items=[
+            ('circle',       "Circle",       ""),
+            ('arc_arrow',    "Arc Arrow",    ""),
+            ('circle_arrow', "Circle Arrow", ""),
+            ('double_arrow', "Double Arrow", ""),
+        ],
+        default='circle',
+        update=_on_widget_edit_changed,
+    )
+    edit_ctrl_offset_x:  bpy.props.FloatProperty(name="X", default=0.0, update=_on_widget_edit_changed)
+    edit_ctrl_offset_y:  bpy.props.FloatProperty(name="Y", default=0.0, update=_on_widget_edit_changed)
+    edit_ctrl_offset_z:  bpy.props.FloatProperty(name="Z", default=0.0, update=_on_widget_edit_changed)
+    edit_ctrl_axis:      bpy.props.EnumProperty(
+        name="Ctrl Axis",
+        items=[('X', 'X', ''), ('Y', 'Y', ''), ('Z', 'Z', '')],
+        default='X',
+        update=_on_widget_edit_changed,
+    )
+    edit_shape_rotation: bpy.props.FloatProperty(name="Shape Rotation", default=0.0, update=_on_widget_edit_changed)
+    edit_ctrl_radius:    bpy.props.FloatProperty(name="Scale", default=0.1, min=0.001, update=_on_widget_edit_changed)
+    edit_ctrl_color:     bpy.props.EnumProperty(
+        name="Ctrl Color",
+        items=[
+            ('RED',    "Red",    ""),
+            ('ORANGE', "Orange", ""),
+            ('YELLOW', "Yellow", ""),
+            ('GREEN',  "Green",  ""),
+            ('BLUE',   "Blue",   ""),
+            ('PURPLE', "Purple", ""),
+            ('WHITE',  "White",  ""),
+        ],
+        default='RED',
+        update=_on_widget_edit_changed,
     )
     show_templates: bpy.props.BoolProperty(
         name="Templates",

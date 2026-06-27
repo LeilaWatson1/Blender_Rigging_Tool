@@ -26,24 +26,35 @@ def pose_update(context, rig_name):
 
     override = _get_view3d_override(context)
 
-    # CTRL pass: for each template bone, find its CTRL_ or HIDE_ bone and move it
+    # Read head, tail, and roll from template edit bones — roll is only on EditBone,
+    # not on the object-mode Bone, so we must enter edit mode to retrieve it.
+    context.view_layer.objects.active = template_obj
+    with context.temp_override(**override):
+        bpy.ops.object.mode_set(mode='EDIT')
+    template_data = {
+        eb.name[5:]: (eb.head.copy(), eb.tail.copy(), eb.roll)
+        for eb in template_obj.data.edit_bones
+        if eb.name.startswith("TEMP_")
+    }
+    with context.temp_override(**override):
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+    # CTRL pass: apply head, tail, and roll to each matching CTRL_ or HIDE_ bone.
     if ctrl_obj:
         context.view_layer.objects.active = ctrl_obj
         with context.temp_override(**override):
             bpy.ops.object.mode_set(mode='EDIT')
         edit_bones = ctrl_obj.data.edit_bones
-        for bone in template_obj.data.bones:
-            if not bone.name.startswith("TEMP_"):
-                continue
-            bone_name = bone.name[5:]
+        for bone_name, (head, tail, roll) in template_data.items():
             target = edit_bones.get(f"CTRL_{bone_name}") or edit_bones.get(f"HIDE_{bone_name}")
             if target:
-                target.head = bone.head_local.copy()
-                target.tail = bone.tail_local.copy()
+                target.head = head
+                target.tail = tail
+                target.roll = roll
         with context.temp_override(**override):
             bpy.ops.object.mode_set(mode='OBJECT')
 
-    # DEF pass: move each DEF bone to its Copy Transforms target's world position
+    # DEF pass: move each DEF bone to its Copy Transforms target's world position and copy roll.
     if def_obj and ctrl_obj:
         bone_targets = {}
         for pose_bone in def_obj.pose.bones:
@@ -65,5 +76,8 @@ def pose_update(context, rig_name):
             if edit_bone:
                 edit_bone.head = def_inv @ (ctrl_obj.matrix_world @ ctrl_bone.head_local)
                 edit_bone.tail = def_inv @ (ctrl_obj.matrix_world @ ctrl_bone.tail_local)
+                part_name = def_bone_name[4:]  # strip "DEF_"
+                if part_name in template_data:
+                    edit_bone.roll = template_data[part_name][2]
         with context.temp_override(**override):
             bpy.ops.object.mode_set(mode='OBJECT')
