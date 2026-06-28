@@ -86,6 +86,7 @@ def _on_current_rig_changed(self, context):
         item.name        = part_name
         item.parent_name = parent_name
         item.indent      = indent
+        item.is_socket   = bone.name.startswith("SKT_")
         for child in bone.children:
             add_recursive(child, part_name, indent + 1)
 
@@ -100,6 +101,7 @@ class RigPartItem(bpy.types.PropertyGroup):
     # name is built into PropertyGroup
     parent_name: bpy.props.StringProperty()
     indent:      bpy.props.IntProperty(default=0)
+    is_socket:   bpy.props.BoolProperty(default=False)
 
 
 # Holds all tool-level state stored on the scene: rig name, UI toggles, mode, and the parts list.
@@ -176,25 +178,59 @@ class RigToolProperties(bpy.types.PropertyGroup):
         name="Templates",
         default=False,
     )
-    show_revolver_ui: bpy.props.BoolProperty(
-        default=False,
+    selected_template: bpy.props.EnumProperty(
+        name="Template",
+        items=[
+            ('revolver', "Revolver", "Contains: local, trigger, safety, cylinder_latch, and cylinder parts"),
+            ('pistol',   "Pistol",   "Contains: local, trigger, mag, and slide parts"),
+        ],
+        default='revolver',
     )
-    revolver_name: bpy.props.StringProperty(
+    template_prefix: bpy.props.StringProperty(
         name="Name Prefix",
         default="",
     )
-    show_pistol_ui: bpy.props.BoolProperty(
-        default=False,
+    template_grip_socket: bpy.props.BoolProperty(
+        name="Grip Socket",
+        default=True,
+        description="Adds a socket for the grip",
     )
-    pistol_name: bpy.props.StringProperty(
-        name="Name Prefix",
-        default="",
+    template_ejector_socket: bpy.props.BoolProperty(
+        name="Ejector Socket",
+        default=True,
+        description="Adds a socket for the ejector",
     )
-    show_add_bone_ui: bpy.props.BoolProperty(
-        default=False,
+    template_flash_socket: bpy.props.BoolProperty(
+        name="Flash Socket",
+        default=True,
+        description="Adds a socket for the flash hider",
     )
-    show_add_cylinder_ui: bpy.props.BoolProperty(
-        default=False,
+    selected_part_type: bpy.props.EnumProperty(
+        name="Part Type",
+        items=[
+            ('single_bone', "Single Bone", "A DEF/CTRL bone pair"),
+            ('socket_bone', "Socket Bone", "A non-deforming bone in the export skeleton for use as an attachment socket"),
+            ('cylinder',    "Cylinder",    "A multi-bone cylinder part"),
+        ],
+        default='single_bone',
+    )
+    socket_name: bpy.props.StringProperty(
+        name="Bone Name",
+        default="socket",
+    )
+    socket_has_control: bpy.props.BoolProperty(
+        name="Has Control",
+        default=True,
+    )
+    socket_widget: bpy.props.EnumProperty(
+        name="Widget",
+        items=[
+            ('circle',       "Circle",       ""),
+            ('arc_arrow',    "Arc Arrow",    ""),
+            ('circle_arrow', "Circle Arrow", ""),
+            ('double_arrow', "Double Arrow", ""),
+        ],
+        default='circle',
     )
     cylinder_name: bpy.props.StringProperty(
         name="Name",

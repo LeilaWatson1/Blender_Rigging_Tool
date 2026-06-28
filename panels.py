@@ -6,7 +6,8 @@ import bpy
 class RIGTOOL_UL_parts_list(bpy.types.UIList):
     # Renders a single list row with indent prefix and part name.
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname):
-        layout.label(text=("  " * item.indent) + item.name)
+        prefix = "[SKT] " if item.is_socket else ""
+        layout.label(text=("  " * item.indent) + prefix + item.name)
 
 
 # Main N-panel for the Rig Tool tab, containing the parts list, templates, parts, and mode buttons.
@@ -104,20 +105,14 @@ class VIEW3D_PT_rig_tool(bpy.types.Panel):
                  emboss=False)
         if props.show_templates:
             box = layout.box()
-            box.operator("rig_tool.template_revolver", text="Revolver")
-            if props.show_revolver_ui:
-                inner = box.box()
-                split = inner.split(factor=0.50)
-                split.label(text="Name")
-                split.prop(props, "revolver_name", text="")
-                inner.operator("rig_tool.create_revolver_template")
-            box.operator("rig_tool.template_pistol", text="Pistol")
-            if props.show_pistol_ui:
-                inner = box.box()
-                split = inner.split(factor=0.50)
-                split.label(text="Name")
-                split.prop(props, "pistol_name", text="")
-                inner.operator("rig_tool.create_pistol_template")
+            box.prop(props, "selected_template", text="")
+            split = box.split(factor=0.35)
+            split.label(text="Name Prefix")
+            split.prop(props, "template_prefix", text="")
+            box.prop(props, "template_grip_socket")
+            box.prop(props, "template_ejector_socket")
+            box.prop(props, "template_flash_socket")
+            box.operator("rig_tool.create_template", text="Create")
 
         row = layout.row()
         row.prop(props, "show_parts",
@@ -125,9 +120,9 @@ class VIEW3D_PT_rig_tool(bpy.types.Panel):
                  emboss=False)
         if props.show_parts:
             box = layout.box()
-            box.operator("rig_tool.add_bone", text="Single Bone")
-            if props.show_add_bone_ui:
-                inner = box.box()
+            box.prop(props, "selected_part_type", text="")
+            inner = box.box()
+            if props.selected_part_type == 'single_bone':
                 split = inner.split(factor=0.50)
                 split.label(text="Bone Name")
                 split.prop(props, "bone_name", text="")
@@ -135,14 +130,17 @@ class VIEW3D_PT_rig_tool(bpy.types.Panel):
                 row.prop(props, "is_deforming")
                 row.prop(props, "has_control")
                 inner.prop(props, "bone_widget", text="Widget")
-                inner.operator("rig_tool.create_bone")
-            box.operator("rig_tool.add_cylinder_part", text="Cylinder")
-            if props.show_add_cylinder_ui:
-                inner = box.box()
+            elif props.selected_part_type == 'socket_bone':
+                split = inner.split(factor=0.50)
+                split.label(text="Bone Name")
+                split.prop(props, "socket_name", text="")
+                inner.prop(props, "socket_has_control")
+                inner.prop(props, "socket_widget", text="Widget")
+            elif props.selected_part_type == 'cylinder':
                 split = inner.split(factor=0.50)
                 split.label(text="Name")
                 split.prop(props, "cylinder_name", text="")
-                inner.operator("rig_tool.create_cylinder_part")
+            box.operator("rig_tool.create_part", text="Create")
 
         row = layout.row()
         row.prop(props, "show_export",

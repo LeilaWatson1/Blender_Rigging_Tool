@@ -18,8 +18,20 @@ def _unique_name(name_type, name, props=None):
     return f"{name}_{i:03d}"
 
 
+# Walks up the parts hierarchy to find the nearest ancestor that has a CTRL_ bone.
+def _find_ctrl_parent(ctrl_obj, parent_bone_name, props):
+    name = parent_bone_name
+    while name and name != "root":
+        ctrl = ctrl_obj.data.edit_bones.get(f"CTRL_{name}")
+        if ctrl:
+            return ctrl
+        part = next((p for p in props.parts if p.name == name), None)
+        name = part.parent_name if part else "root"
+    return ctrl_obj.data.edit_bones.get("root")
+
+
 # Appends a new entry to the parts list in the UI and moves it to sit directly under its parent.
-def _add_part(context, part_name, parent_name=""):
+def _add_part(context, part_name, parent_name="", is_socket=False):
     props = context.scene.rig_tool
     indent     = 0
     parent_idx = None
@@ -32,6 +44,7 @@ def _add_part(context, part_name, parent_name=""):
     item.name        = part_name
     item.parent_name = parent_name
     item.indent      = indent
+    item.is_socket   = is_socket
 
     if parent_idx is not None:
         new_idx    = len(props.parts) - 1
@@ -114,7 +127,8 @@ def restore_mode(context, rig_name):
 
 
 # Creates a TEMP_ bone in the template armature at the given position, with optional parent/child linking.
-def add_template(context, rig_name, bone_name, parent_bone=None, child_bone=None, bone_head=(0.0, 0.0, 0.0), bone_tail=(0.0, 0.1, 0.0)):
+# bone_color sets a custom pose bone color (RGB tuple); None leaves the bone at the armature default.
+def add_template(context, rig_name, bone_name, parent_bone=None, child_bone=None, bone_head=(0.0, 0.0, 0.0), bone_tail=(0.0, 0.1, 0.0), bone_color=None):
     template_obj = bpy.data.objects.get(f"TEMPLATE_{rig_name}")
     if not template_obj:
         return
@@ -131,6 +145,12 @@ def add_template(context, rig_name, bone_name, parent_bone=None, child_bone=None
     new_bone.head = bone_head
     new_bone.tail = bone_tail
     new_bone.use_connect = False
+
+    if bone_color:
+        new_bone.color.palette = 'CUSTOM'
+        new_bone.color.custom.normal = bone_color
+        new_bone.color.custom.select = tuple(min(1.0, c + 0.4) for c in bone_color)
+        new_bone.color.custom.active = tuple(min(1.0, c + 0.6) for c in bone_color)
 
     if parent_bone:
         parent_TEMP_name = f"TEMP_{parent_bone}"
@@ -230,7 +250,7 @@ def create_base_rig(context, rig_name):
 
 # Creates DEF_ and/or CTRL_ bones for a named part, sets up the widget, assigns the Copy Transforms
 # constraint linking DEF to CTRL, registers the part in the UI list, and returns the actual name used.
-def create_bone(context, rig_name, bone_name, is_deforming, has_control, parent_bone_name="root", ctrl_radius=0.5, ctrl_axis='Z', bone_head=(0.0, 0.0, 0.0), bone_tail=(0.1, 0.0, 0.0), ctrl_offset=(0.0, 0.0, 0.0), widget_type='circle', ctrl_shape_rotation=0.0, ctrl_color=(0.8, 0.0, 0.0), ctrl_widget_rotation_z=0.0):
+def create_bone(context, rig_name, bone_name, is_deforming, has_control, parent_bone_name="root", ctrl_radius=0.5, ctrl_axis='Z', bone_head=(0.0, 0.0, 0.0), bone_tail=(0.1, 0.0, 0.0), ctrl_offset=(0.0, 0.0, 0.0), widget_type='circle', ctrl_shape_rotation=0.0, ctrl_color=(0.8, 0.0, 0.0), ctrl_widget_rotation_z=0.0, bone_prefix="DEF"):
     def_obj, ctrl_obj, template_obj = create_base_rig(context, rig_name)
     override = _get_view3d_override(context)
 
@@ -239,7 +259,7 @@ def create_bone(context, rig_name, bone_name, is_deforming, has_control, parent_
     bone_tail  = _apply_front_axis(bone_tail, front_axis)
 
     bone_name      = _unique_name('part', bone_name, context.scene.rig_tool)
-    def_bone_name  = f"DEF_{bone_name}"
+    def_bone_name  = f"{bone_prefix}_{bone_name}"
     ctrl_bone_name = f"CTRL_{bone_name}"
 
     if is_deforming:
@@ -249,9 +269,16 @@ def create_bone(context, rig_name, bone_name, is_deforming, has_control, parent_
         def_bone = def_obj.data.edit_bones.new(def_bone_name)
         def_bone.head = bone_head
         def_bone.tail = bone_tail
-        def_parent_name = parent_bone_name if parent_bone_name == "root" else f"DEF_{parent_bone_name}"
+        # Resolve parent — try DEF_ first, fall back to SKT_ for socket-parented bones.
+        if parent_bone_name == "root":
+            def_parent_name = "root"
+        elif f"DEF_{parent_bone_name}" in def_obj.data.edit_bones:
+            def_parent_name = f"DEF_{parent_bone_name}"
+        else:
+            def_parent_name = f"SKT_{parent_bone_name}"
         def_bone.parent = def_obj.data.edit_bones[def_parent_name]
         def_bone.use_connect = False
+        def_bone.use_deform  = (bone_prefix == "DEF")
         with context.temp_override(**override):
             bpy.ops.object.mode_set(mode='OBJECT')
 
@@ -285,7 +312,7 @@ def create_bone(context, rig_name, bone_name, is_deforming, has_control, parent_
         ctrl_bone = ctrl_obj.data.edit_bones.new(ctrl_bone_name)
         ctrl_bone.head = bone_head
         ctrl_bone.tail = bone_tail
-        ctrl_bone.parent = ctrl_obj.data.edit_bones[f"CTRL_{parent_bone_name}"]
+        ctrl_bone.parent = _find_ctrl_parent(ctrl_obj, parent_bone_name, context.scene.rig_tool)
         ctrl_bone.use_connect = False
         with context.temp_override(**override):
             bpy.ops.object.mode_set(mode='OBJECT')
@@ -315,8 +342,9 @@ def create_bone(context, rig_name, bone_name, is_deforming, has_control, parent_
         with context.temp_override(**override):
             bpy.ops.object.mode_set(mode='OBJECT')
 
-    _add_part(context, bone_name, parent_bone_name)
-    add_template(context, rig_name, bone_name, parent_bone=parent_bone_name, bone_head=bone_head, bone_tail=bone_tail)
+    _add_part(context, bone_name, parent_bone_name, is_socket=(bone_prefix == "SKT"))
+    template_color = (0.0, 0.8, 0.0) if bone_prefix == "SKT" else None
+    add_template(context, rig_name, bone_name, parent_bone=parent_bone_name, bone_head=bone_head, bone_tail=bone_tail, bone_color=template_color)
     return bone_name
 
 

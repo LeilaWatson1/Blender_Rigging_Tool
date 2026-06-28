@@ -43,6 +43,14 @@ def _sort_parts_by_hierarchy(props):
         props.parts.move(current_idx, target_idx)
 
 
+# Returns "DEF_" or "SKT_" for a part's bone in the DEF armature (object mode safe).
+def _get_def_prefix(bone_name, def_obj):
+    for prefix in ("SKT_", "DEF_"):
+        if def_obj.data.bones.get(f"{prefix}{bone_name}"):
+            return prefix
+    return "DEF_"
+
+
 # Reparents the DEF_, CTRL_, and TEMP_ bones for a part across all three armatures.
 def _reparent_bones(context, bone_name, rig_name, new_parent):
     override = _get_view3d_override(context)
@@ -56,8 +64,8 @@ def _reparent_bones(context, bone_name, rig_name, new_parent):
         context.view_layer.objects.active = def_obj
         with context.temp_override(**override):
             bpy.ops.object.mode_set(mode='EDIT')
-        def_bone = def_obj.data.edit_bones.get(f"DEF_{bone_name}")
-        new_def_parent = def_obj.data.edit_bones.get("root" if new_parent == "root" else f"DEF_{new_parent}")
+        def_bone       = def_obj.data.edit_bones.get(f"{_get_def_prefix(bone_name, def_obj)}{bone_name}")
+        new_def_parent = def_obj.data.edit_bones.get("root" if new_parent == "root" else f"{_get_def_prefix(new_parent, def_obj)}{new_parent}")
         if def_bone and new_def_parent:
             def_bone.parent = new_def_parent
         with context.temp_override(**override):
@@ -149,25 +157,12 @@ class RIGTOOL_OT_create_rig(bpy.types.Operator):
         return {'FINISHED'}
 
 
-# Toggles the Single Bone UI panel open or closed.
-class RIGTOOL_OT_add_bone(bpy.types.Operator):
-    bl_idname = "rig_tool.add_bone"
-    bl_label = "Add Bone"
-    bl_description = "Show options for adding a bone to the rig"
-    bl_options = {'REGISTER', 'UNDO'}
-
-    def execute(self, context):
-        props = context.scene.rig_tool
-        props.show_add_bone_ui = not props.show_add_bone_ui
-        return {'FINISHED'}
-
-
-# Creates a single DEF/CTRL bone pair with the settings entered in the Single Bone panel.
-class RIGTOOL_OT_create_bone(bpy.types.Operator):
-    bl_idname = "rig_tool.create_bone"
-    bl_label = "Create"
-    bl_description = "Create the bone with the specified settings"
-    bl_options = {'REGISTER', 'UNDO'}
+# Creates the part type selected in the Parts panel with the relevant settings.
+class RIGTOOL_OT_create_part(bpy.types.Operator):
+    bl_idname     = "rig_tool.create_part"
+    bl_label      = "Create"
+    bl_description = "Create the selected part type with the specified settings"
+    bl_options    = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         props    = context.scene.rig_tool
@@ -175,80 +170,42 @@ class RIGTOOL_OT_create_bone(bpy.types.Operator):
         if not rig_name or rig_name == 'NONE':
             return {'CANCELLED'}
         parent = props.parts[props.active_part_index].name if props.parts and props.active_part_index < len(props.parts) else "root"
-        add_bone(
-            context,
-            rig_name,
-            props.bone_name,
-            props.is_deforming,
-            props.has_control,
-            parent_bone_name=parent,
-            widget_type=props.bone_widget,
-        )
+        if props.selected_part_type == 'single_bone':
+            add_bone(context, rig_name, props.bone_name, props.is_deforming, props.has_control,
+                     parent_bone_name=parent, widget_type=props.bone_widget)
+        elif props.selected_part_type == 'socket_bone':
+            add_bone(context, rig_name, props.socket_name, True, props.socket_has_control,
+                     parent_bone_name=parent, widget_type=props.socket_widget, bone_prefix="SKT")
+        elif props.selected_part_type == 'cylinder':
+            create_cylinder_part(context, rig_name, parent_bone_name=parent, base_name=props.cylinder_name)
         restore_mode(context, rig_name)
         return {'FINISHED'}
 
 
-# Toggles the Revolver template UI panel open or closed.
-class RIGTOOL_OT_template_revolver(bpy.types.Operator):
-    bl_idname = "rig_tool.template_revolver"
-    bl_label = "Revolver"
-    bl_description = "Contains: cylinder, cylinder latch, trigger, and safety parts"
-    bl_options = {'REGISTER', 'UNDO'}
-
-    def execute(self, context):
-        props = context.scene.rig_tool
-        if not props.current_rig or props.current_rig == 'NONE':
-            return {'CANCELLED'}
-        props.show_revolver_ui = not props.show_revolver_ui
-        return {'FINISHED'}
-
-
-# Creates all bones for the revolver template using the prefix entered in the Revolver panel.
-class RIGTOOL_OT_create_revolver_template(bpy.types.Operator):
-    bl_idname = "rig_tool.create_revolver_template"
-    bl_label = "Create"
-    bl_description = "Create the revolver template with the specified name prefix"
-    bl_options = {'REGISTER', 'UNDO'}
+# Creates the template selected in the Templates panel using the shared name prefix.
+class RIGTOOL_OT_create_template(bpy.types.Operator):
+    bl_idname     = "rig_tool.create_template"
+    bl_label      = "Create"
+    bl_description = "Create the selected template with the specified name prefix"
+    bl_options    = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         props    = context.scene.rig_tool
         rig_name = props.current_rig
         if not rig_name or rig_name == 'NONE':
             return {'CANCELLED'}
-        create_revolver_template(context, rig_name, prefix=props.revolver_name)
+        prefix = props.template_prefix
+        grip_socket    = props.template_grip_socket
+        ejector_socket = props.template_ejector_socket
+        flash_socket   = props.template_flash_socket
+        if props.selected_template == 'revolver':
+            create_revolver_template(context, rig_name, prefix=prefix, grip_socket=grip_socket, ejector_socket=ejector_socket, flash_socket=flash_socket)
+        elif props.selected_template == 'pistol':
+            create_pistol_template(context, rig_name, prefix=prefix, grip_socket=grip_socket, ejector_socket=ejector_socket, flash_socket=flash_socket)
         restore_mode(context, rig_name)
         return {'FINISHED'}
 
 
-# Toggles the Cylinder UI panel open or closed.
-class RIGTOOL_OT_add_cylinder_part(bpy.types.Operator):
-    bl_idname = "rig_tool.add_cylinder_part"
-    bl_label = "Cylinder"
-    bl_description = "Show options for adding a cylinder part to the rig"
-    bl_options = {'REGISTER', 'UNDO'}
-
-    def execute(self, context):
-        props = context.scene.rig_tool
-        props.show_add_cylinder_ui = not props.show_add_cylinder_ui
-        return {'FINISHED'}
-
-
-# Creates a cylinder part using the name entered in the Cylinder panel.
-class RIGTOOL_OT_create_cylinder_part(bpy.types.Operator):
-    bl_idname = "rig_tool.create_cylinder_part"
-    bl_label = "Create"
-    bl_description = "Create the cylinder part with the specified name"
-    bl_options = {'REGISTER', 'UNDO'}
-
-    def execute(self, context):
-        props    = context.scene.rig_tool
-        rig_name = props.current_rig
-        if not rig_name or rig_name == 'NONE':
-            return {'CANCELLED'}
-        parent = props.parts[props.active_part_index].name if props.parts and props.active_part_index < len(props.parts) else "root"
-        create_cylinder_part(context, rig_name, parent_bone_name=parent, base_name=props.cylinder_name)
-        restore_mode(context, rig_name)
-        return {'FINISHED'}
 
 
 # Switches between Template Mode and Pose Mode, updating armature visibility and applying template positions.
@@ -399,7 +356,7 @@ class RIGTOOL_OT_delete_part(bpy.types.Operator):
             context.view_layer.objects.active = def_obj
             with context.temp_override(**override):
                 bpy.ops.object.mode_set(mode='EDIT')
-            bone = def_obj.data.edit_bones.get(f"DEF_{old_name}")
+            bone = def_obj.data.edit_bones.get(f"{_get_def_prefix(old_name, def_obj)}{old_name}")
             if bone:
                 def_obj.data.edit_bones.remove(bone)
             with context.temp_override(**override):
@@ -478,9 +435,10 @@ class RIGTOOL_OT_rename_part(bpy.types.Operator):
             context.view_layer.objects.active = def_obj
             with context.temp_override(**override):
                 bpy.ops.object.mode_set(mode='EDIT')
-            bone = def_obj.data.edit_bones.get(f"DEF_{old_name}")
+            prefix = _get_def_prefix(old_name, def_obj)
+            bone   = def_obj.data.edit_bones.get(f"{prefix}{old_name}")
             if bone:
-                bone.name = f"DEF_{new_name}"
+                bone.name = f"{prefix}{new_name}"
             with context.temp_override(**override):
                 bpy.ops.object.mode_set(mode='OBJECT')
 
@@ -623,38 +581,6 @@ class RIGTOOL_OT_parent_to_root(bpy.types.Operator):
         return {'FINISHED'}
 
 
-# Toggles the Pistol template UI panel open or closed.
-class RIGTOOL_OT_template_pistol(bpy.types.Operator):
-    bl_idname     = "rig_tool.template_pistol"
-    bl_label      = "Pistol"
-    bl_description = "Contains: local, trigger, mag, and slide parts"
-    bl_options    = {'REGISTER', 'UNDO'}
-
-    def execute(self, context):
-        props = context.scene.rig_tool
-        if not props.current_rig or props.current_rig == 'NONE':
-            return {'CANCELLED'}
-        props.show_pistol_ui = not props.show_pistol_ui
-        return {'FINISHED'}
-
-
-# Creates all bones for the pistol template using the prefix entered in the Pistol panel.
-class RIGTOOL_OT_create_pistol_template(bpy.types.Operator):
-    bl_idname     = "rig_tool.create_pistol_template"
-    bl_label      = "Create"
-    bl_description = "Create the pistol template with the specified name prefix"
-    bl_options    = {'REGISTER', 'UNDO'}
-
-    def execute(self, context):
-        props    = context.scene.rig_tool
-        rig_name = props.current_rig
-        if not rig_name or rig_name == 'NONE':
-            return {'CANCELLED'}
-        create_pistol_template(context, rig_name, prefix=props.pistol_name)
-        restore_mode(context, rig_name)
-        return {'FINISHED'}
-
-
 # Mutable flag — checked by _on_widget_edit_changed in properties.py to suppress
 # re-entrant apply calls while _load_widget_settings is bulk-setting the edit fields.
 _widget_load_guard = [False]
@@ -775,13 +701,11 @@ def _apply_widget_settings(context):
     restore_mode(context, rig_name)
 
 
+
+
 classes = [
     RIGTOOL_OT_create_rig,
-    RIGTOOL_OT_add_bone,
-    RIGTOOL_OT_create_bone,
-    RIGTOOL_OT_template_revolver,
-    RIGTOOL_OT_add_cylinder_part,
-    RIGTOOL_OT_create_cylinder_part,
+    RIGTOOL_OT_create_part,
     RIGTOOL_OT_set_mode,
     RIGTOOL_OT_move_part,
     RIGTOOL_OT_set_parent,
@@ -790,9 +714,7 @@ classes = [
     RIGTOOL_OT_parent_to_root,
     RIGTOOL_OT_delete_part,
     RIGTOOL_OT_rename_part,
-    RIGTOOL_OT_create_revolver_template,
-    RIGTOOL_OT_template_pistol,
-    RIGTOOL_OT_create_pistol_template,
+    RIGTOOL_OT_create_template,
     RIGTOOL_OT_delete_rig,
 ]
 
