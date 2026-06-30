@@ -27,6 +27,12 @@ class VIEW3D_PT_rig_tool(bpy.types.Panel):
         split.label(text="Current Rig")
         split.prop(props, "current_rig", text="")
 
+        split = layout.split(factor=0.30)
+        split.label(text="Visibility")
+        row = split.row(align=True)
+        row.prop(props, "show_current_rig", text="Current Rig", toggle=True)
+        row.prop(props, "show_other_rigs",  text="All Rigs",    toggle=True)
+
         split = layout.split(factor=0.25)
         split.label(text="New Rig")
         row = split.row(align=True)

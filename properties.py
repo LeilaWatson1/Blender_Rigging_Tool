@@ -57,6 +57,29 @@ def _on_widget_edit_changed(self, context):
     _apply_widget_settings(context)
 
 
+# Shows or hides the collection for the current rig.
+def _on_show_current_rig_changed(self, context):
+    rig_name = self.current_rig
+    if not rig_name or rig_name == 'NONE':
+        return
+    col = bpy.data.collections.get(rig_name)
+    if col:
+        col.hide_viewport = not self.show_current_rig
+
+
+# Shows or hides collections for all rigs other than the current one.
+def _on_show_other_rigs_changed(self, context):
+    current = self.current_rig
+    hidden  = not self.show_other_rigs
+    for obj in bpy.data.objects:
+        if obj.name.startswith("DEF_"):
+            rig_name = obj.name[4:]
+            if rig_name != current:
+                col = bpy.data.collections.get(rig_name)
+                if col:
+                    col.hide_viewport = hidden
+
+
 # Sets export format to the best default for the selected engine.
 def _on_engine_changed(self, context):
     if self.export_engine == 'UNREAL':
@@ -94,6 +117,18 @@ def _on_current_rig_changed(self, context):
     if root_bone:
         for child in root_bone.children:
             add_recursive(child, "root", 0)
+
+    col = bpy.data.collections.get(props.current_rig)
+    if col:
+        props.show_current_rig = not col.hide_viewport
+
+    other_cols = [
+        bpy.data.collections.get(obj.name[4:])
+        for obj in bpy.data.objects
+        if obj.name.startswith("DEF_") and obj.name[4:] != props.current_rig
+    ]
+    visible_cols = [c for c in other_cols if c]
+    props.show_other_rigs = bool(visible_cols) and all(not c.hide_viewport for c in visible_cols)
 
 
 # Defines the shape of a single item in the parts list: its name, parent, and indent depth.
@@ -173,6 +208,18 @@ class RigToolProperties(bpy.types.PropertyGroup):
         ],
         default='RED',
         update=_on_widget_edit_changed,
+    )
+    show_current_rig: bpy.props.BoolProperty(
+        name="Current Rig",
+        default=True,
+        description="Changes visibility for current rig.",
+        update=_on_show_current_rig_changed,
+    )
+    show_other_rigs: bpy.props.BoolProperty(
+        name="All Rigs",
+        default=False,
+        description="Changes visibility of all rigs that are not current.",
+        update=_on_show_other_rigs_changed,
     )
     show_templates: bpy.props.BoolProperty(
         name="Templates",
