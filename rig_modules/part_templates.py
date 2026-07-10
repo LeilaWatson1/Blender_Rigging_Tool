@@ -85,8 +85,9 @@ def create_cylinder_part(context, rig_name, parent_bone_name="root", base_name="
 
 
 # Visibility-aware wrapper for bone chain creation.
-def add_bone_chain(context, rig_name, base_name, is_deforming, has_control, chain_length=2, parent_bone_name="root", widget_type='circle'):
+def add_bone_chain(context, rig_name, base_name, is_deforming, has_control, chain_length=2, parent_bone_name="root", widget_type='circle', fk_ik='BOTH'):
     armatures_visible(rig_name)
     create_bone_chain(context, rig_name, base_name, is_deforming, has_control,
-                      chain_length=chain_length, parent_bone_name=parent_bone_name, widget_type=widget_type)
+                      chain_length=chain_length, parent_bone_name=parent_bone_name, widget_type=widget_type,
+                      fk_ik=fk_ik)
     update_rig_visibility(context, rig_name)

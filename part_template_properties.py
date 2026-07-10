@@ -64,10 +64,47 @@ class CylinderBoneProps(bpy.types.PropertyGroup):
     )
 
 
+# Updates HIDE_follow constraint influences and FK/IK control visibility when the blend slider changes.
+def _on_chain_fk_ik_changed(self, context):
+    ctrl_obj = bpy.data.objects.get(f"CTRL_{self.rig_name}")
+    if not ctrl_obj:
+        return
+    base_name = self.base_name
+    blend     = self.fk_ik
+    is_ik     = blend >= 0.5
+
+    for pb in ctrl_obj.pose.bones:
+        if pb.name.startswith(f"HIDE_follow_{base_name}_") and len(pb.constraints) >= 2:
+            pb.constraints[0].influence = 1.0 - blend
+            pb.constraints[1].influence = blend
+
+    for bone in ctrl_obj.data.bones:
+        if bone.name.startswith(f"CTRL_FK_{base_name}_"):
+            bone.hide = is_ik
+        elif bone.name in (f"CTRL_IK_{base_name}", f"CTRL_IK_Pole_{base_name}", f"CTRL_IK_Top_{base_name}"):
+            bone.hide = not is_ik
+
+
+
+# Holds the FK/IK blend for a bone chain, registered on PoseBone so it is keyframeable.
+class ChainBoneProps(bpy.types.PropertyGroup):
+    base_name: bpy.props.StringProperty()
+    rig_name:  bpy.props.StringProperty()
+    fk_ik:     bpy.props.FloatProperty(
+        name="FK / IK",
+        default=0.0, min=0.0, max=1.0,
+        update=_on_chain_fk_ik_changed,
+    )
+
+
 def register():
     bpy.utils.register_class(CylinderBoneProps)
+    bpy.utils.register_class(ChainBoneProps)
     bpy.types.PoseBone.cylinder_props = bpy.props.PointerProperty(type=CylinderBoneProps)
+    bpy.types.PoseBone.chain_props    = bpy.props.PointerProperty(type=ChainBoneProps)
 
 def unregister():
     del bpy.types.PoseBone.cylinder_props
+    del bpy.types.PoseBone.chain_props
+    bpy.utils.unregister_class(ChainBoneProps)
     bpy.utils.unregister_class(CylinderBoneProps)

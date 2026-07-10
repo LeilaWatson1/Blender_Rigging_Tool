@@ -177,7 +177,8 @@ class RIGTOOL_OT_create_part(bpy.types.Operator):
                      parent_bone_name=parent, widget_type=props.socket_widget, bone_prefix="SKT")
         elif props.selected_part_type == 'bone_chain':
             add_bone_chain(context, rig_name, props.chain_name, props.chain_is_deforming, props.chain_has_control,
-                           chain_length=props.chain_length, parent_bone_name=parent, widget_type=props.chain_widget)
+                           chain_length=props.chain_length, parent_bone_name=parent, widget_type=props.chain_widget,
+                           fk_ik=props.chain_fk_ik)
         elif props.selected_part_type == 'cylinder':
             create_cylinder_part(context, rig_name, parent_bone_name=parent, base_name=props.cylinder_name)
         restore_mode(context, rig_name)
@@ -336,10 +337,12 @@ class RIGTOOL_OT_delete_part(bpy.types.Operator):
         if not props.parts or props.active_part_index >= len(props.parts):
             return {'CANCELLED'}
 
-        item       = props.parts[props.active_part_index]
-        old_name   = item.name
-        old_parent = item.parent_name
-        rig_name   = props.current_rig
+        item           = props.parts[props.active_part_index]
+        old_name       = item.name
+        old_parent     = item.parent_name
+        is_chain       = item.is_fk_ik_chain
+        chain_base     = item.chain_base_name
+        rig_name       = props.current_rig
         if not rig_name or rig_name == 'NONE':
             return {'CANCELLED'}
         override   = _get_view3d_override(context)
@@ -358,9 +361,15 @@ class RIGTOOL_OT_delete_part(bpy.types.Operator):
             context.view_layer.objects.active = def_obj
             with context.temp_override(**override):
                 bpy.ops.object.mode_set(mode='EDIT')
-            bone = def_obj.data.edit_bones.get(f"{_get_def_prefix(old_name, def_obj)}{old_name}")
-            if bone:
-                def_obj.data.edit_bones.remove(bone)
+            if is_chain:
+                to_remove = [eb for eb in def_obj.data.edit_bones
+                             if eb.name.startswith(f"DEF_{chain_base}_")]
+                for eb in to_remove:
+                    def_obj.data.edit_bones.remove(eb)
+            else:
+                bone = def_obj.data.edit_bones.get(f"{_get_def_prefix(old_name, def_obj)}{old_name}")
+                if bone:
+                    def_obj.data.edit_bones.remove(bone)
             with context.temp_override(**override):
                 bpy.ops.object.mode_set(mode='OBJECT')
 
@@ -369,12 +378,24 @@ class RIGTOOL_OT_delete_part(bpy.types.Operator):
             with context.temp_override(**override):
                 bpy.ops.object.mode_set(mode='EDIT')
             edit_bones = ctrl_obj.data.edit_bones
-            ctrl_bone = edit_bones.get(f"CTRL_{old_name}")
-            if ctrl_bone:
-                edit_bones.remove(ctrl_bone)
-            hide_bone = edit_bones.get(f"HIDE_follow_{old_name}")
-            if hide_bone:
-                edit_bones.remove(hide_bone)
+            if is_chain:
+                chain_singles = {f"CTRL_IK_Top_{chain_base}", f"CTRL_IK_{chain_base}",
+                                 f"CTRL_IK_Pole_{chain_base}"}
+                to_remove = [eb for eb in edit_bones if (
+                    eb.name.startswith(f"CTRL_FK_{chain_base}_") or
+                    eb.name.startswith(f"HIDE_IK_{chain_base}_") or
+                    eb.name.startswith(f"HIDE_follow_{chain_base}_") or
+                    eb.name in chain_singles
+                )]
+                for eb in to_remove:
+                    edit_bones.remove(eb)
+            else:
+                ctrl_bone = edit_bones.get(f"CTRL_{old_name}")
+                if ctrl_bone:
+                    edit_bones.remove(ctrl_bone)
+                hide_bone = edit_bones.get(f"HIDE_follow_{old_name}")
+                if hide_bone:
+                    edit_bones.remove(hide_bone)
             with context.temp_override(**override):
                 bpy.ops.object.mode_set(mode='OBJECT')
 
@@ -383,12 +404,21 @@ class RIGTOOL_OT_delete_part(bpy.types.Operator):
             with context.temp_override(**override):
                 bpy.ops.object.mode_set(mode='EDIT')
             edit_bones = template_obj.data.edit_bones
-            temp_bone = edit_bones.get(f"TEMP_{old_name}")
-            if temp_bone:
-                edit_bones.remove(temp_bone)
-            follow_bone = edit_bones.get(f"TEMP_follow_{old_name}")
-            if follow_bone:
-                edit_bones.remove(follow_bone)
+            if is_chain:
+                to_remove = [eb for eb in edit_bones if (
+                    eb.name.startswith(f"TEMP_FK_{chain_base}_") or
+                    eb.name.startswith(f"TEMP_IK_{chain_base}_") or
+                    eb.name == f"TEMP_IK_Pole_{chain_base}"
+                )]
+                for eb in to_remove:
+                    edit_bones.remove(eb)
+            else:
+                temp_bone = edit_bones.get(f"TEMP_{old_name}")
+                if temp_bone:
+                    edit_bones.remove(temp_bone)
+                follow_bone = edit_bones.get(f"TEMP_follow_{old_name}")
+                if follow_bone:
+                    edit_bones.remove(follow_bone)
             with context.temp_override(**override):
                 bpy.ops.object.mode_set(mode='OBJECT')
 
@@ -554,11 +584,12 @@ def _load_widget_settings(context):
     rig_name = props.current_rig
     if not rig_name or rig_name == 'NONE':
         return
-    if not props.parts or props.active_part_index >= len(props.parts):
+    active_bone = context.active_pose_bone
+    if not active_bone or not active_bone.name.startswith("CTRL_"):
         return
 
-    bone_name = props.parts[props.active_part_index].name
-    wgt       = bpy.data.objects.get(f"WGT_{rig_name}_{bone_name}")
+    bone_suffix = active_bone.name[5:]
+    wgt         = bpy.data.objects.get(f"WGT_{rig_name}_{bone_suffix}")
 
     _widget_load_guard[0] = True
     try:
@@ -599,11 +630,12 @@ def _apply_widget_settings(context):
     rig_name = props.current_rig
     if not rig_name or rig_name == 'NONE':
         return
-    if not props.parts or props.active_part_index >= len(props.parts):
+    active_bone = context.active_pose_bone
+    if not active_bone or not active_bone.name.startswith("CTRL_"):
         return
 
-    bone_name      = props.parts[props.active_part_index].name
-    ctrl_bone_name = f"CTRL_{bone_name}"
+    ctrl_bone_name = active_bone.name
+    bone_suffix    = active_bone.name[5:]
 
     offset         = (props.edit_ctrl_offset_x, props.edit_ctrl_offset_y, props.edit_ctrl_offset_z)
     shape_rotation = props.edit_shape_rotation
@@ -619,7 +651,7 @@ def _apply_widget_settings(context):
         restore_mode(context, rig_name)
         return
 
-    wgt_name    = f"WGT_{rig_name}_{bone_name}"
+    wgt_name    = f"WGT_{rig_name}_{bone_suffix}"
     old_wgt     = bpy.data.objects.get(wgt_name)
     ctrl_radius = props.edit_ctrl_radius
 

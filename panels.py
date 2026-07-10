@@ -151,6 +151,9 @@ class VIEW3D_PT_rig_tool(bpy.types.Panel):
                 split = inner.split(factor=0.50)
                 split.label(text="Chain Length")
                 split.prop(props, "chain_length", text="")
+                split = inner.split(factor=0.50)
+                split.label(text="FK/IK")
+                split.prop(props, "chain_fk_ik", text="")
             elif props.selected_part_type == 'cylinder':
                 split = inner.split(factor=0.50)
                 split.label(text="Name")

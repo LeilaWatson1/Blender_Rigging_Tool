@@ -51,8 +51,6 @@ def _on_widget_edit_changed(self, context):
         return
     if not self.current_rig or self.current_rig == 'NONE':
         return
-    if not self.parts or self.active_part_index >= len(self.parts):
-        return
     from .operators import _apply_widget_settings
     _apply_widget_settings(context)
 
@@ -104,8 +102,17 @@ def _on_current_rig_changed(self, context):
         return
 
     def add_recursive(bone, parent_name="root", indent=0):
-        part_name = bone.name[4:]
-        item = props.parts.add()
+        def_pb = def_obj.pose.bones.get(bone.name)
+        if def_pb and "chain_part_name" in def_pb:
+            item                 = props.parts.add()
+            item.name            = str(def_pb["chain_part_name"])
+            item.parent_name     = parent_name
+            item.indent          = indent
+            item.is_fk_ik_chain  = True
+            item.chain_base_name = str(def_pb["chain_base_name"])
+            return
+        part_name        = bone.name[4:]
+        item             = props.parts.add()
         item.name        = part_name
         item.parent_name = parent_name
         item.indent      = indent
@@ -134,9 +141,11 @@ def _on_current_rig_changed(self, context):
 # Defines the shape of a single item in the parts list: its name, parent, and indent depth.
 class RigPartItem(bpy.types.PropertyGroup):
     # name is built into PropertyGroup
-    parent_name: bpy.props.StringProperty()
-    indent:      bpy.props.IntProperty(default=0)
-    is_socket:   bpy.props.BoolProperty(default=False)
+    parent_name:     bpy.props.StringProperty()
+    indent:          bpy.props.IntProperty(default=0)
+    is_socket:       bpy.props.BoolProperty(default=False)
+    is_fk_ik_chain:  bpy.props.BoolProperty(default=False)
+    chain_base_name: bpy.props.StringProperty()
 
 
 # Holds all tool-level state stored on the scene: rig name, UI toggles, mode, and the parts list.
@@ -306,6 +315,15 @@ class RigToolProperties(bpy.types.PropertyGroup):
         name="Chain Length",
         default=2,
         min=2,
+    )
+    chain_fk_ik: bpy.props.EnumProperty(
+        name="FK/IK",
+        items=[
+            ('BOTH', "Both", ""),
+            ('FK',   "FK",   ""),
+            ('IK',   "IK",   ""),
+        ],
+        default='BOTH',
     )
     cylinder_name: bpy.props.StringProperty(
         name="Name",

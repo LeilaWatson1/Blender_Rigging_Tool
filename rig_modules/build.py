@@ -19,6 +19,7 @@ def _unique_name(name_type, name, props=None):
 
 
 # Walks up the parts hierarchy to find the nearest ancestor that has a CTRL_ bone.
+# Chain parts resolve to their last CTRL_FK bone (or CTRL_IK for IK-only chains).
 def _find_ctrl_parent(ctrl_obj, parent_bone_name, props):
     name = parent_bone_name
     while name and name != "root":
@@ -26,8 +27,33 @@ def _find_ctrl_parent(ctrl_obj, parent_bone_name, props):
         if ctrl:
             return ctrl
         part = next((p for p in props.parts if p.name == name), None)
+        if part and part.is_fk_ik_chain:
+            base         = part.chain_base_name
+            follow_bones = sorted(
+                (eb for eb in ctrl_obj.data.edit_bones if eb.name.startswith(f"HIDE_follow_{base}_")),
+                key=lambda b: b.name,
+            )
+            if follow_bones:
+                return follow_bones[-1]
         name = part.parent_name if part else "root"
     return ctrl_obj.data.edit_bones.get("root")
+
+
+# Resolves the DEF parent edit bone for a given parent_bone_name, handling chain parts.
+# Must be called while def_obj is in EDIT mode.
+def _resolve_def_parent(def_obj, parent_bone_name, props):
+    part = next((p for p in props.parts if p.name == parent_bone_name), None)
+    if part and part.is_fk_ik_chain:
+        chain_bones = sorted(
+            (eb for eb in def_obj.data.edit_bones if eb.name.startswith(f"DEF_{part.chain_base_name}_")),
+            key=lambda b: b.name,
+        )
+        return chain_bones[-1] if chain_bones else def_obj.data.edit_bones.get("root")
+    if parent_bone_name == "root":
+        return def_obj.data.edit_bones.get("root")
+    if f"DEF_{parent_bone_name}" in def_obj.data.edit_bones:
+        return def_obj.data.edit_bones[f"DEF_{parent_bone_name}"]
+    return def_obj.data.edit_bones.get(f"SKT_{parent_bone_name}")
 
 
 # Appends a new entry to the parts list in the UI and moves it to sit directly under its parent.
@@ -56,6 +82,7 @@ def _add_part(context, part_name, parent_name="", is_socket=False):
                 break
         if insert_idx < new_idx:
             props.parts.move(new_idx, insert_idx)
+    return item
 
 
 # Rotates a coordinate tuple +90° around Z when front_axis is 'Y', converting X-native to Y-native.
@@ -269,14 +296,7 @@ def create_bone(context, rig_name, bone_name, is_deforming, has_control, parent_
         def_bone = def_obj.data.edit_bones.new(def_bone_name)
         def_bone.head = bone_head
         def_bone.tail = bone_tail
-        # Resolve parent — try DEF_ first, fall back to SKT_ for socket-parented bones.
-        if parent_bone_name == "root":
-            def_parent_name = "root"
-        elif f"DEF_{parent_bone_name}" in def_obj.data.edit_bones:
-            def_parent_name = f"DEF_{parent_bone_name}"
-        else:
-            def_parent_name = f"SKT_{parent_bone_name}"
-        def_bone.parent = def_obj.data.edit_bones[def_parent_name]
+        def_bone.parent = _resolve_def_parent(def_obj, parent_bone_name, context.scene.rig_tool)
         def_bone.use_connect = use_connect
         def_bone.use_deform  = (bone_prefix == "DEF")
         with context.temp_override(**override):
@@ -347,17 +367,210 @@ def create_bone(context, rig_name, bone_name, is_deforming, has_control, parent_
     add_template(context, rig_name, bone_name, parent_bone=parent_bone_name, bone_head=bone_head, bone_tail=bone_tail, bone_color=template_color, use_connect=use_connect)
     return bone_name
 
-# Creates a chain of connected bones along the forward axis, each 0.1 m long.
-# Bones are named {base_name}_001, {base_name}_002, … and connected head-to-tail from bone 2 onward.
-def create_bone_chain(context, rig_name, base_name, is_deforming, has_control, chain_length=2, parent_bone_name="root", widget_type='circle'):
-    bone_length = 0.1
-    prev_name   = parent_bone_name
-    for i in range(chain_length):
-        name = f"{base_name}_{i + 1:03d}"
-        head = (i * bone_length, 0.0, 0.0)
-        tail = ((i + 1) * bone_length, 0.0, 0.0)
-        create_bone(context, rig_name, name, is_deforming, has_control,
-                    parent_bone_name=prev_name, bone_head=head, bone_tail=tail,
-                    ctrl_radius=0.25, ctrl_axis='Y',
-                    widget_type=widget_type, use_connect=(i > 0))
-        prev_name = name
+# Creates a chain of connected edit bones, returning the last bone created.
+# use_connect is False for the first bone (free head) and True for all subsequent bones (head-to-tail).
+def _add_chain_edit_bones(ebs, bone_names, prefix, bone_parent, bone_len, front_axis):
+    par = bone_parent
+    for i, name in enumerate(bone_names):
+        eb             = ebs.new(f"{prefix}_{name}")
+        eb.head        = _apply_front_axis((i * bone_len, 0.0, 0.0), front_axis)
+        eb.tail        = _apply_front_axis(((i + 1) * bone_len, 0.0, 0.0), front_axis)
+        eb.parent      = par
+        eb.use_connect = (i > 0)
+        par            = eb
+    return par
+
+
+# Creates a single named edit bone with explicit world-space head/tail positions.
+def _add_single_edit_bone(ebs, name, head_pos, tail_pos, parent, front_axis, use_connect=False):
+    eb             = ebs.new(name)
+    eb.head        = _apply_front_axis(head_pos, front_axis)
+    eb.tail        = _apply_front_axis(tail_pos, front_axis)
+    eb.parent      = parent
+    eb.use_connect = use_connect
+    return eb
+
+
+# Applies widget, rotation mode, and custom color to a pose bone.
+def _apply_ctrl_pose(pb, widget, color):
+    pb.custom_shape               = widget
+    pb.use_custom_shape_bone_size = False
+    pb.rotation_mode              = 'QUATERNION'
+    pb.color.palette              = 'CUSTOM'
+    pb.color.custom.normal        = color
+    pb.color.custom.select        = tuple(min(1.0, c + 0.4) for c in color)
+    pb.color.custom.active        = tuple(min(1.0, c + 0.6) for c in color)
+
+
+# Creates a bone chain rig along the forward axis. fk_ik controls which control systems are built:
+# 'FK' — FK controls only, 'IK' — IK controls only, 'BOTH' — blendable FK/IK with a slider bone.
+def create_bone_chain(context, rig_name, base_name, is_deforming, has_control,
+                      chain_length=2, parent_bone_name="root", widget_type='circle', fk_ik='BOTH'):
+    def_obj, ctrl_obj, template_obj = create_base_rig(context, rig_name)
+    override   = _get_view3d_override(context)
+    front_axis = context.scene.rig_tool.front_axis
+    props      = context.scene.rig_tool
+    bone_len   = 0.1
+    tip        = chain_length * bone_len
+
+    bone_names     = [f"{base_name}_{i + 1:03d}" for i in range(chain_length)]
+    part_name      = {'BOTH': f"FK_IK_{base_name}", 'FK': f"FK_{base_name}", 'IK': f"IK_{base_name}"}[fk_ik]
+    fk_color       = (0.8, 0.8, 0.0)
+    ik_color       = (0.0, 0.0, 0.8)
+    wgt_collection = bpy.data.collections.get(f"WGTS_{rig_name}")
+
+    # ── Pass 1: CTRL edit mode ────────────────────────────────────────────────
+    context.view_layer.objects.active = ctrl_obj
+    with context.temp_override(**override):
+        bpy.ops.object.mode_set(mode='EDIT')
+    ebs         = ctrl_obj.data.edit_bones
+    ctrl_parent = _find_ctrl_parent(ctrl_obj, parent_bone_name, props)
+
+    if fk_ik in ('BOTH', 'FK'):
+        _add_chain_edit_bones(ebs, bone_names, "CTRL_FK", ctrl_parent, bone_len, front_axis)
+
+    if fk_ik in ('BOTH', 'IK'):
+        top_eb = _add_single_edit_bone(
+            ebs, f"CTRL_IK_Top_{base_name}",
+            (0.0, 0.0, 0.0), (bone_len, 0.0, 0.0),
+            ctrl_parent, front_axis,
+        )
+        _add_chain_edit_bones(ebs, bone_names, "HIDE_IK", top_eb, bone_len, front_axis)
+        _add_single_edit_bone(
+            ebs, f"CTRL_IK_{base_name}",
+            (tip, 0.0, 0.0), (tip + bone_len, 0.0, 0.0),
+            top_eb, front_axis,
+        )
+        _add_single_edit_bone(
+            ebs, f"CTRL_IK_Pole_{base_name}",
+            (tip * 0.5, bone_len * 1.5, 0.0), (tip * 0.5, bone_len * 2.5, 0.0),
+            top_eb, front_axis,
+        )
+
+    _add_chain_edit_bones(ebs, bone_names, "HIDE_follow", ctrl_parent, bone_len, front_axis)
+
+    # Hide HIDE_ bones last so earlier operations can still reference them by name.
+    for eb in ebs:
+        if eb.name.startswith("HIDE_"):
+            eb.hide = True
+
+    with context.temp_override(**override):
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+    # ── Pass 2: DEF edit mode ─────────────────────────────────────────────────
+    if is_deforming:
+        context.view_layer.objects.active = def_obj
+        with context.temp_override(**override):
+            bpy.ops.object.mode_set(mode='EDIT')
+        ebs        = def_obj.data.edit_bones
+        def_parent = _resolve_def_parent(def_obj, parent_bone_name, props)
+        _add_chain_edit_bones(ebs, bone_names, "DEF", def_parent, bone_len, front_axis)
+        with context.temp_override(**override):
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+    # ── Pass 3: CTRL pose mode ────────────────────────────────────────────────
+    context.view_layer.objects.active = ctrl_obj
+    with context.temp_override(**override):
+        bpy.ops.object.mode_set(mode='POSE')
+    pbs = ctrl_obj.pose.bones
+
+    if fk_ik in ('BOTH', 'FK') and has_control:
+        for name in bone_names:
+            wgt = create_circle_widget(f"WGT_{rig_name}_FK_{name}", wgt_collection, radius=0.25, axis='Y')
+            _apply_ctrl_pose(pbs[f"CTRL_FK_{name}"], wgt, fk_color)
+
+    if fk_ik in ('BOTH', 'IK') and has_control:
+        for bone_n, color in [
+            (f"CTRL_IK_Top_{base_name}", (0.0, 0.3, 0.8)),
+            (f"CTRL_IK_{base_name}",     ik_color),
+        ]:
+            wgt = create_circle_widget(f"WGT_{rig_name}_{bone_n}", wgt_collection, radius=0.25, axis='Y')
+            _apply_ctrl_pose(pbs[bone_n], wgt, color)
+        pole_name = f"CTRL_IK_Pole_{base_name}"
+        wgt = create_circle_widget(f"WGT_{rig_name}_{pole_name}", wgt_collection, radius=0.25, axis='Y')
+        _apply_ctrl_pose(pbs[pole_name], wgt, ik_color)
+        pbs[pole_name].custom_shape_scale_xyz = (0.5, 0.5, 0.5)
+
+        ik_con               = pbs[f"HIDE_IK_{bone_names[-1]}"].constraints.new('IK')
+        ik_con.target        = ctrl_obj
+        ik_con.subtarget     = f"CTRL_IK_{base_name}"
+        ik_con.pole_target   = ctrl_obj
+        ik_con.pole_subtarget = f"CTRL_IK_Pole_{base_name}"
+        ik_con.chain_count   = chain_length
+        ik_con.pole_angle    = math.pi
+
+    for name in bone_names:
+        follow_pb = pbs[f"HIDE_follow_{name}"]
+        if fk_ik in ('BOTH', 'FK'):
+            c           = follow_pb.constraints.new('COPY_TRANSFORMS')
+            c.target    = ctrl_obj
+            c.subtarget = f"CTRL_FK_{name}"
+            c.influence = 1.0
+        if fk_ik in ('BOTH', 'IK'):
+            c           = follow_pb.constraints.new('COPY_TRANSFORMS')
+            c.target    = ctrl_obj
+            c.subtarget = f"HIDE_IK_{name}"
+            c.influence = 0.0 if fk_ik == 'BOTH' else 1.0
+
+    if fk_ik == 'BOTH' and has_control:
+        # Stamp chain_props on every control bone so the Item tab slider appears on any selected chain bone.
+        for name in bone_names:
+            pbs[f"CTRL_FK_{name}"].chain_props.base_name = base_name
+            pbs[f"CTRL_FK_{name}"].chain_props.rig_name  = rig_name
+        for ik_bone_name in (f"CTRL_IK_Top_{base_name}", f"CTRL_IK_{base_name}",
+                              f"CTRL_IK_Pole_{base_name}"):
+            pb = pbs.get(ik_bone_name)
+            if pb:
+                pb.chain_props.base_name = base_name
+                pb.chain_props.rig_name  = rig_name
+
+        # Initial state: FK-dominant, so IK controls start hidden.
+        ctrl_obj.data.bones[f"CTRL_IK_{base_name}"].hide     = True
+        ctrl_obj.data.bones[f"CTRL_IK_Pole_{base_name}"].hide = True
+        ctrl_obj.data.bones[f"CTRL_IK_Top_{base_name}"].hide  = True
+
+    with context.temp_override(**override):
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+    # ── Pass 4: DEF pose mode ─────────────────────────────────────────────────
+    if is_deforming:
+        context.view_layer.objects.active = def_obj
+        with context.temp_override(**override):
+            bpy.ops.object.mode_set(mode='POSE')
+        for name in bone_names:
+            c           = def_obj.pose.bones[f"DEF_{name}"].constraints.new('COPY_TRANSFORMS')
+            c.target    = ctrl_obj
+            c.subtarget = f"HIDE_follow_{name}"
+        first_pb                      = def_obj.pose.bones[f"DEF_{bone_names[0]}"]
+        first_pb["chain_part_name"]   = part_name
+        first_pb["chain_base_name"]   = base_name
+        with context.temp_override(**override):
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+    # ── Pass 5: Template bones ────────────────────────────────────────────────
+    if fk_ik in ('BOTH', 'FK'):
+        for i, name in enumerate(bone_names):
+            head     = _apply_front_axis((i * bone_len, 0.0, 0.0), front_axis)
+            tail     = _apply_front_axis(((i + 1) * bone_len, 0.0, 0.0), front_axis)
+            parent_t = f"FK_{bone_names[i - 1]}" if i > 0 else parent_bone_name
+            add_template(context, rig_name, f"FK_{name}",
+                         parent_bone=parent_t, bone_head=head, bone_tail=tail, use_connect=(i > 0))
+
+    if fk_ik == 'IK':
+        for i, name in enumerate(bone_names):
+            head     = _apply_front_axis((i * bone_len, 0.0, 0.0), front_axis)
+            tail     = _apply_front_axis(((i + 1) * bone_len, 0.0, 0.0), front_axis)
+            parent_t = f"IK_{bone_names[i - 1]}" if i > 0 else parent_bone_name
+            add_template(context, rig_name, f"IK_{name}",
+                         parent_bone=parent_t, bone_head=head, bone_tail=tail, use_connect=(i > 0))
+
+    if fk_ik in ('BOTH', 'IK'):
+        add_template(context, rig_name, f"IK_Pole_{base_name}",
+                     parent_bone=parent_bone_name,
+                     bone_head=_apply_front_axis((tip * 0.5, bone_len * 1.5, 0.0), front_axis),
+                     bone_tail=_apply_front_axis((tip * 0.5, bone_len * 2.5, 0.0), front_axis))
+
+    # ── Pass 6: Parts list ────────────────────────────────────────────────────
+    chain_item                  = _add_part(context, part_name, parent_bone_name)
+    chain_item.is_fk_ik_chain   = True
+    chain_item.chain_base_name  = base_name

@@ -43,12 +43,47 @@ def pose_update(context, rig_name):
         with context.temp_override(**override):
             bpy.ops.object.mode_set(mode='EDIT')
         edit_bones = ctrl_obj.data.edit_bones
+        chain_tips = {}  # base_name -> (last_index, head, tail) of the last FK bone seen
         for bone_name, (head, tail, roll) in template_data.items():
             target = edit_bones.get(f"CTRL_{bone_name}") or edit_bones.get(f"HIDE_{bone_name}")
             if target:
                 target.head = head
                 target.tail = tail
                 target.roll = roll
+                # Sync HIDE_follow and HIDE_IK to match their FK counterpart so DEF bones update correctly.
+                if bone_name.startswith("FK_"):
+                    suffix = bone_name[3:]
+                    for companion in (edit_bones.get(f"HIDE_follow_{suffix}"),
+                                      edit_bones.get(f"HIDE_IK_{suffix}")):
+                        if companion:
+                            companion.head = head
+                            companion.tail = tail
+                            companion.roll = roll
+                    parts = suffix.rsplit("_", 1)
+                    if len(parts) == 2 and parts[1].isdigit():
+                        base, idx = parts[0], int(parts[1])
+                        if base not in chain_tips or idx > chain_tips[base][0]:
+                            chain_tips[base] = (idx, head, tail)
+                # For IK-only chains, sync HIDE_follow from the IK template bones.
+                elif bone_name.startswith("IK_"):
+                    suffix = bone_name[3:]
+                    companion = edit_bones.get(f"HIDE_follow_{suffix}")
+                    if companion:
+                        companion.head = head
+                        companion.tail = tail
+                        companion.roll = roll
+                    parts = suffix.rsplit("_", 1)
+                    if len(parts) == 2 and parts[1].isdigit():
+                        base, idx = parts[0], int(parts[1])
+                        if base not in chain_tips or idx > chain_tips[base][0]:
+                            chain_tips[base] = (idx, head, tail)
+
+        # Move CTRL_IK_ to the tip of its FK chain, continuing in the same direction as the last FK bone.
+        for base, (_, tip_head, tip_tail) in chain_tips.items():
+            ik_eb = edit_bones.get(f"CTRL_IK_{base}")
+            if ik_eb:
+                ik_eb.head = tip_tail
+                ik_eb.tail = tip_tail + (tip_tail - tip_head)
         with context.temp_override(**override):
             bpy.ops.object.mode_set(mode='OBJECT')
 
