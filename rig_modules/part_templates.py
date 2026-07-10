@@ -1,7 +1,12 @@
 import bpy
 import math
-from .build import _get_view3d_override, add_template, create_base_rig, create_bone, armatures_visible, update_rig_visibility, _apply_front_axis
+from .build import _get_view3d_override, add_template, create_base_rig, create_bone, create_bone_chain, armatures_visible, update_rig_visibility, _apply_front_axis
 
+# Visibility-aware wrapper: makes all armatures visible, creates the bone, then restores visibility.
+def add_bone(context, rig_name, bone_name, is_deforming, has_control, **kwargs):
+    armatures_visible(rig_name)
+    create_bone(context, rig_name, bone_name, is_deforming, has_control, **kwargs)
+    update_rig_visibility(context, rig_name)
 
 # Creates cylinder_latch and cylinder bones, sets up a HIDE_follow bone in the CTRL armature
 # to drive the cylinder's rotation independently of its latch movement.
@@ -77,3 +82,11 @@ def create_cylinder_part(context, rig_name, parent_bone_name="root", base_name="
 
     update_rig_visibility(context, rig_name)
     return cyl_name
+
+
+# Visibility-aware wrapper for bone chain creation.
+def add_bone_chain(context, rig_name, base_name, is_deforming, has_control, chain_length=2, parent_bone_name="root", widget_type='circle'):
+    armatures_visible(rig_name)
+    create_bone_chain(context, rig_name, base_name, is_deforming, has_control,
+                      chain_length=chain_length, parent_bone_name=parent_bone_name, widget_type=widget_type)
+    update_rig_visibility(context, rig_name)

@@ -1,7 +1,6 @@
 import bpy
 from .build import (
     create_base_rig,
-    add_bone,
     create_bone,
     add_template,
     armatures_visible,
@@ -9,9 +8,8 @@ from .build import (
     restore_mode,
     _get_view3d_override,
     _unique_name,
-    _apply_front_axis,
 )
-from .part_templates import create_cylinder_part
+from .part_templates import create_cylinder_part, add_bone_chain, add_bone
 from .templates import create_revolver_template, create_pistol_template
 
 

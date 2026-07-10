@@ -1,7 +1,6 @@
 import bpy
 import math
-import mathutils
-from .rig_modules import create_base_rig, add_bone, create_revolver_template, create_pistol_template, create_cylinder_part, update_rig_visibility, restore_mode, armatures_visible, pose_update, _get_view3d_override, _unique_name, _apply_front_axis
+from .rig_modules import create_base_rig, add_bone, add_bone_chain, create_revolver_template, create_pistol_template, create_cylinder_part, update_rig_visibility, restore_mode, armatures_visible, pose_update, _get_view3d_override, _unique_name
 
 # the Python functions behind your shelf buttons
 
@@ -176,6 +175,9 @@ class RIGTOOL_OT_create_part(bpy.types.Operator):
         elif props.selected_part_type == 'socket_bone':
             add_bone(context, rig_name, props.socket_name, True, props.socket_has_control,
                      parent_bone_name=parent, widget_type=props.socket_widget, bone_prefix="SKT")
+        elif props.selected_part_type == 'bone_chain':
+            add_bone_chain(context, rig_name, props.chain_name, props.chain_is_deforming, props.chain_has_control,
+                           chain_length=props.chain_length, parent_bone_name=parent, widget_type=props.chain_widget)
         elif props.selected_part_type == 'cylinder':
             create_cylinder_part(context, rig_name, parent_bone_name=parent, base_name=props.cylinder_name)
         restore_mode(context, rig_name)
@@ -483,47 +485,6 @@ class RIGTOOL_OT_rename_part(bpy.types.Operator):
         return {'FINISHED'}
 
 
-# Returns the canonical 4x4 rotation from X-native space to the given front axis.
-def _axis_matrix(axis):
-    if axis == 'X':
-        return mathutils.Matrix.Identity(4)
-    else:  # 'Y'
-        return mathutils.Matrix.Rotation(math.pi / 2, 4, 'Z')
-
-
-# Rotates the current rig to match props.front_axis, using current_rig_axis to track applied state.
-class RIGTOOL_OT_apply_front_axis(bpy.types.Operator):
-    bl_idname     = "rig_tool.apply_front_axis"
-    bl_label      = "Apply"
-    bl_description = "Rotate the current rig to face the selected front axis"
-    bl_options    = {'REGISTER', 'UNDO'}
-
-    def execute(self, context):
-        props       = context.scene.rig_tool
-        target_axis = props.front_axis
-        if props.current_rig_axis == target_axis:
-            return {'FINISHED'}
-        rig_name = props.current_rig
-        if rig_name and rig_name != 'NONE':
-            rotation = _axis_matrix(target_axis) @ _axis_matrix(props.current_rig_axis).inverted()
-            override  = _get_view3d_override(context)
-            armatures_visible(rig_name)
-            for prefix in ("DEF_", "CTRL_", "TEMPLATE_"):
-                obj = bpy.data.objects.get(f"{prefix}{rig_name}")
-                if not obj:
-                    continue
-                context.view_layer.objects.active = obj
-                with context.temp_override(**override):
-                    bpy.ops.object.mode_set(mode='EDIT')
-                for bone in obj.data.edit_bones:
-                    bone.head = rotation @ bone.head
-                    bone.tail = rotation @ bone.tail
-                with context.temp_override(**override):
-                    bpy.ops.object.mode_set(mode='OBJECT')
-            update_rig_visibility(context, rig_name)
-        props.current_rig_axis = target_axis
-        restore_mode(context, rig_name)
-        return {'FINISHED'}
 
 
 # Opens a file browser and exports only the DEF armature, rotating to export_front_axis if needed then restoring.
@@ -709,7 +670,6 @@ classes = [
     RIGTOOL_OT_set_mode,
     RIGTOOL_OT_move_part,
     RIGTOOL_OT_set_parent,
-    RIGTOOL_OT_apply_front_axis,
     RIGTOOL_OT_export,
     RIGTOOL_OT_parent_to_root,
     RIGTOOL_OT_delete_part,

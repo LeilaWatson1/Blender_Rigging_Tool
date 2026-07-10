@@ -128,7 +128,7 @@ def restore_mode(context, rig_name):
 
 # Creates a TEMP_ bone in the template armature at the given position, with optional parent/child linking.
 # bone_color sets a custom pose bone color (RGB tuple); None leaves the bone at the armature default.
-def add_template(context, rig_name, bone_name, parent_bone=None, child_bone=None, bone_head=(0.0, 0.0, 0.0), bone_tail=(0.0, 0.1, 0.0), bone_color=None):
+def add_template(context, rig_name, bone_name, parent_bone=None, child_bone=None, bone_head=(0.0, 0.0, 0.0), bone_tail=(0.0, 0.1, 0.0), bone_color=None, use_connect=False):
     template_obj = bpy.data.objects.get(f"TEMPLATE_{rig_name}")
     if not template_obj:
         return
@@ -144,7 +144,7 @@ def add_template(context, rig_name, bone_name, parent_bone=None, child_bone=None
     new_bone = edit_bones.new(TEMP_bone_name)
     new_bone.head = bone_head
     new_bone.tail = bone_tail
-    new_bone.use_connect = False
+    new_bone.use_connect = use_connect
 
     if bone_color:
         new_bone.color.palette = 'CUSTOM'
@@ -250,7 +250,7 @@ def create_base_rig(context, rig_name):
 
 # Creates DEF_ and/or CTRL_ bones for a named part, sets up the widget, assigns the Copy Transforms
 # constraint linking DEF to CTRL, registers the part in the UI list, and returns the actual name used.
-def create_bone(context, rig_name, bone_name, is_deforming, has_control, parent_bone_name="root", ctrl_radius=0.5, ctrl_axis='Z', bone_head=(0.0, 0.0, 0.0), bone_tail=(0.1, 0.0, 0.0), ctrl_offset=(0.0, 0.0, 0.0), widget_type='circle', ctrl_shape_rotation=0.0, ctrl_color=(0.8, 0.0, 0.0), ctrl_widget_rotation_z=0.0, bone_prefix="DEF"):
+def create_bone(context, rig_name, bone_name, is_deforming, has_control, parent_bone_name="root", ctrl_radius=0.5, ctrl_axis='Z', bone_head=(0.0, 0.0, 0.0), bone_tail=(0.1, 0.0, 0.0), ctrl_offset=(0.0, 0.0, 0.0), widget_type='circle', ctrl_shape_rotation=0.0, ctrl_color=(0.8, 0.0, 0.0), ctrl_widget_rotation_z=0.0, bone_prefix="DEF", use_connect=False):
     def_obj, ctrl_obj, template_obj = create_base_rig(context, rig_name)
     override = _get_view3d_override(context)
 
@@ -277,7 +277,7 @@ def create_bone(context, rig_name, bone_name, is_deforming, has_control, parent_
         else:
             def_parent_name = f"SKT_{parent_bone_name}"
         def_bone.parent = def_obj.data.edit_bones[def_parent_name]
-        def_bone.use_connect = False
+        def_bone.use_connect = use_connect
         def_bone.use_deform  = (bone_prefix == "DEF")
         with context.temp_override(**override):
             bpy.ops.object.mode_set(mode='OBJECT')
@@ -313,7 +313,7 @@ def create_bone(context, rig_name, bone_name, is_deforming, has_control, parent_
         ctrl_bone.head = bone_head
         ctrl_bone.tail = bone_tail
         ctrl_bone.parent = _find_ctrl_parent(ctrl_obj, parent_bone_name, context.scene.rig_tool)
-        ctrl_bone.use_connect = False
+        ctrl_bone.use_connect = use_connect
         with context.temp_override(**override):
             bpy.ops.object.mode_set(mode='OBJECT')
 
@@ -344,12 +344,20 @@ def create_bone(context, rig_name, bone_name, is_deforming, has_control, parent_
 
     _add_part(context, bone_name, parent_bone_name, is_socket=(bone_prefix == "SKT"))
     template_color = (0.0, 0.8, 0.0) if bone_prefix == "SKT" else None
-    add_template(context, rig_name, bone_name, parent_bone=parent_bone_name, bone_head=bone_head, bone_tail=bone_tail, bone_color=template_color)
+    add_template(context, rig_name, bone_name, parent_bone=parent_bone_name, bone_head=bone_head, bone_tail=bone_tail, bone_color=template_color, use_connect=use_connect)
     return bone_name
 
-
-# Visibility-aware wrapper: makes all armatures visible, creates the bone, then restores visibility.
-def add_bone(context, rig_name, bone_name, is_deforming, has_control, **kwargs):
-    armatures_visible(rig_name)
-    create_bone(context, rig_name, bone_name, is_deforming, has_control, **kwargs)
-    update_rig_visibility(context, rig_name)
+# Creates a chain of connected bones along the forward axis, each 0.1 m long.
+# Bones are named {base_name}_001, {base_name}_002, … and connected head-to-tail from bone 2 onward.
+def create_bone_chain(context, rig_name, base_name, is_deforming, has_control, chain_length=2, parent_bone_name="root", widget_type='circle'):
+    bone_length = 0.1
+    prev_name   = parent_bone_name
+    for i in range(chain_length):
+        name = f"{base_name}_{i + 1:03d}"
+        head = (i * bone_length, 0.0, 0.0)
+        tail = ((i + 1) * bone_length, 0.0, 0.0)
+        create_bone(context, rig_name, name, is_deforming, has_control,
+                    parent_bone_name=prev_name, bone_head=head, bone_tail=tail,
+                    ctrl_radius=0.25, ctrl_axis='Y',
+                    widget_type=widget_type, use_connect=(i > 0))
+        prev_name = name

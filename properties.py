@@ -257,6 +257,7 @@ class RigToolProperties(bpy.types.PropertyGroup):
         items=[
             ('single_bone', "Single Bone", "A DEF/CTRL bone pair"),
             ('socket_bone', "Socket Bone", "A non-deforming bone in the export skeleton for use as an attachment socket"),
+            ('bone_chain',  "Bone Chain",  "A chain of connected bones along the forward axis"),
             ('cylinder',    "Cylinder",    "A multi-bone cylinder part"),
         ],
         default='single_bone',
@@ -278,6 +279,33 @@ class RigToolProperties(bpy.types.PropertyGroup):
             ('double_arrow', "Double Arrow", ""),
         ],
         default='circle',
+    )
+    chain_name: bpy.props.StringProperty(
+        name="Bone Name",
+        default="chain",
+    )
+    chain_is_deforming: bpy.props.BoolProperty(
+        name="Is Deforming",
+        default=True,
+    )
+    chain_has_control: bpy.props.BoolProperty(
+        name="Has Control",
+        default=True,
+    )
+    chain_widget: bpy.props.EnumProperty(
+        name="Widget",
+        items=[
+            ('circle',       "Circle",       ""),
+            ('arc_arrow',    "Arc Arrow",    ""),
+            ('circle_arrow', "Circle Arrow", ""),
+            ('double_arrow', "Double Arrow", ""),
+        ],
+        default='circle',
+    )
+    chain_length: bpy.props.IntProperty(
+        name="Chain Length",
+        default=2,
+        min=2,
     )
     cylinder_name: bpy.props.StringProperty(
         name="Name",
@@ -313,11 +341,6 @@ class RigToolProperties(bpy.types.PropertyGroup):
                        )
     front_axis:        bpy.props.EnumProperty(
                            name="Front Axis",
-                           items=[('X', 'X', ''), ('Y', 'Y', '')],
-                           default='X',
-                       )
-    current_rig_axis:  bpy.props.EnumProperty(
-                           name="Current Rig Axis",
                            items=[('X', 'X', ''), ('Y', 'Y', '')],
                            default='X',
                        )

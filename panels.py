@@ -33,17 +33,15 @@ class VIEW3D_PT_rig_tool(bpy.types.Panel):
         row.prop(props, "show_current_rig", text="Current Rig", toggle=True)
         row.prop(props, "show_other_rigs",  text="All Rigs",    toggle=True)
 
+        split = layout.split(factor=0.30)
+        split.label(text="Front Axis")
+        split.prop(props, "front_axis", text="")
+
         split = layout.split(factor=0.25)
         split.label(text="New Rig")
         row = split.row(align=True)
         row.prop(props, "rig_name", text="")
         row.operator("rig_tool.create_rig", text="Create")
-
-        split = layout.split(factor=0.30)
-        split.label(text="Front Axis")
-        row = split.row(align=True)
-        row.prop(props, "front_axis", text="")
-        row.operator("rig_tool.apply_front_axis", text="Apply")
 
         layout.operator("rig_tool.delete_rig", text="Delete Rig")
 
@@ -142,6 +140,17 @@ class VIEW3D_PT_rig_tool(bpy.types.Panel):
                 split.prop(props, "socket_name", text="")
                 inner.prop(props, "socket_has_control")
                 inner.prop(props, "socket_widget", text="Widget")
+            elif props.selected_part_type == 'bone_chain':
+                split = inner.split(factor=0.50)
+                split.label(text="Bone Name")
+                split.prop(props, "chain_name", text="")
+                row = inner.row()
+                row.prop(props, "chain_is_deforming")
+                row.prop(props, "chain_has_control")
+                inner.prop(props, "chain_widget", text="Widget")
+                split = inner.split(factor=0.50)
+                split.label(text="Chain Length")
+                split.prop(props, "chain_length", text="")
             elif props.selected_part_type == 'cylinder':
                 split = inner.split(factor=0.50)
                 split.label(text="Name")
