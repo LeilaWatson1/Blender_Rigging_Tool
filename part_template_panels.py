@@ -65,10 +65,3 @@ class VIEW3D_PT_chain_props(bpy.types.Panel):
                     layout.prop(ik_con, "pole_angle")
 
 
-def register():
-    bpy.utils.register_class(VIEW3D_PT_cylinder_props)
-    bpy.utils.register_class(VIEW3D_PT_chain_props)
-
-def unregister():
-    bpy.utils.unregister_class(VIEW3D_PT_chain_props)
-    bpy.utils.unregister_class(VIEW3D_PT_cylinder_props)

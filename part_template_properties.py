@@ -97,14 +97,3 @@ class ChainBoneProps(bpy.types.PropertyGroup):
     )
 
 
-def register():
-    bpy.utils.register_class(CylinderBoneProps)
-    bpy.utils.register_class(ChainBoneProps)
-    bpy.types.PoseBone.cylinder_props = bpy.props.PointerProperty(type=CylinderBoneProps)
-    bpy.types.PoseBone.chain_props    = bpy.props.PointerProperty(type=ChainBoneProps)
-
-def unregister():
-    del bpy.types.PoseBone.cylinder_props
-    del bpy.types.PoseBone.chain_props
-    bpy.utils.unregister_class(ChainBoneProps)
-    bpy.utils.unregister_class(CylinderBoneProps)

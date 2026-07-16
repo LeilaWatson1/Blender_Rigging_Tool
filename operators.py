@@ -50,7 +50,9 @@ def _get_def_prefix(bone_name, def_obj):
     return "DEF_"
 
 
+
 # Reparents the DEF_, CTRL_, and TEMP_ bones for a part across all three armatures.
+# If new_parent is currently a child of bone_name the two are swapped first to avoid a cycle.
 def _reparent_bones(context, bone_name, rig_name, new_parent):
     override = _get_view3d_override(context)
     armatures_visible(rig_name)
@@ -66,6 +68,8 @@ def _reparent_bones(context, bone_name, rig_name, new_parent):
         def_bone       = def_obj.data.edit_bones.get(f"{_get_def_prefix(bone_name, def_obj)}{bone_name}")
         new_def_parent = def_obj.data.edit_bones.get("root" if new_parent == "root" else f"{_get_def_prefix(new_parent, def_obj)}{new_parent}")
         if def_bone and new_def_parent:
+            if new_def_parent.parent == def_bone:
+                new_def_parent.parent = def_bone.parent
             def_bone.parent = new_def_parent
         with context.temp_override(**override):
             bpy.ops.object.mode_set(mode='OBJECT')
@@ -74,9 +78,11 @@ def _reparent_bones(context, bone_name, rig_name, new_parent):
         context.view_layer.objects.active = ctrl_obj
         with context.temp_override(**override):
             bpy.ops.object.mode_set(mode='EDIT')
-        ctrl_bone = ctrl_obj.data.edit_bones.get(f"CTRL_{bone_name}")
+        ctrl_bone       = ctrl_obj.data.edit_bones.get(f"CTRL_{bone_name}")
         new_ctrl_parent = ctrl_obj.data.edit_bones.get(f"CTRL_{new_parent}")
         if ctrl_bone and new_ctrl_parent:
+            if new_ctrl_parent.parent == ctrl_bone:
+                new_ctrl_parent.parent = ctrl_bone.parent
             ctrl_bone.parent = new_ctrl_parent
         with context.temp_override(**override):
             bpy.ops.object.mode_set(mode='OBJECT')
@@ -87,7 +93,13 @@ def _reparent_bones(context, bone_name, rig_name, new_parent):
             bpy.ops.object.mode_set(mode='EDIT')
         temp_bone = template_obj.data.edit_bones.get(f"TEMP_{bone_name}")
         if temp_bone:
-            temp_bone.parent = None if new_parent == "root" else template_obj.data.edit_bones.get(f"TEMP_{new_parent}")
+            if new_parent == "root":
+                temp_bone.parent = None
+            else:
+                new_temp_parent = template_obj.data.edit_bones.get(f"TEMP_{new_parent}")
+                if new_temp_parent and new_temp_parent.parent == temp_bone:
+                    new_temp_parent.parent = temp_bone.parent
+                temp_bone.parent = new_temp_parent
         with context.temp_override(**override):
             bpy.ops.object.mode_set(mode='OBJECT')
 
@@ -95,10 +107,15 @@ def _reparent_bones(context, bone_name, rig_name, new_parent):
 
 
 # Updates a part's parent, recalculates indents, sorts the list by hierarchy, and reparents bones.
+# If new_parent is a direct child of bone_name, it is moved up to bone_name's current parent first
+# to prevent a cycle in the parts list that would crash _sort_parts_by_hierarchy.
 def _set_parent(context, item, rig_name, new_parent):
     bone_name = item.name
-    item.parent_name = new_parent
     props = context.scene.rig_tool
+    new_parent_item = next((p for p in props.parts if p.name == new_parent), None)
+    if new_parent_item and new_parent_item.parent_name == bone_name:
+        new_parent_item.parent_name = item.parent_name
+    item.parent_name = new_parent
     _recalculate_indents(props)
     _sort_parts_by_hierarchy(props)
     for i, part in enumerate(props.parts):
@@ -295,8 +312,14 @@ class RIGTOOL_OT_move_part(bpy.types.Operator):
         new_parent = above.parent_name if above else "root"
         if below and above and below.indent > above.indent:
             new_parent = below.parent_name
+        # If above is a direct child of item, item should become a child of above (swap hierarchy).
+        if new_parent == item.name:
+            new_parent = above.name
 
         if item.parent_name != new_parent:
+            # If new_parent was our direct child, update its parent in the parts list first to avoid a cycle.
+            if above and above.name == new_parent and above.parent_name == item.name:
+                above.parent_name = item.parent_name
             item.parent_name = new_parent
             _recalculate_indents(props)
             _reparent_bones(context, item.name, props.current_rig, new_parent)
@@ -710,10 +733,3 @@ classes = [
     RIGTOOL_OT_delete_rig,
 ]
 
-def register():
-    for cls in classes:
-        bpy.utils.register_class(cls)
-
-def unregister():
-    for cls in reversed(classes):
-        bpy.utils.unregister_class(cls)

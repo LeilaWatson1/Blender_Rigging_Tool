@@ -110,12 +110,14 @@ class VIEW3D_PT_rig_tool(bpy.types.Panel):
         if props.show_templates:
             box = layout.box()
             box.prop(props, "selected_template", text="")
-            split = box.split(factor=0.35)
-            split.label(text="Name Prefix")
-            split.prop(props, "template_prefix", text="")
-            box.prop(props, "template_grip_socket")
-            box.prop(props, "template_ejector_socket")
-            box.prop(props, "template_flash_socket")
+            inner = box.box()
+            if props.selected_template == 'revolver' or props.selected_template == 'pistol':
+                split = inner.split(factor=0.50)
+                split.label(text="Name Prefix")
+                split.prop(props, "template_prefix", text="")
+                inner.prop(props, "template_grip_socket")
+                inner.prop(props, "template_ejector_socket")
+                inner.prop(props, "template_flash_socket")
             box.operator("rig_tool.create_template", text="Create")
 
         row = layout.row()
@@ -181,10 +183,3 @@ class VIEW3D_PT_rig_tool(bpy.types.Panel):
             box.operator("rig_tool.export", text="Export")
 
 
-def register():
-    bpy.utils.register_class(RIGTOOL_UL_parts_list)
-    bpy.utils.register_class(VIEW3D_PT_rig_tool)
-
-def unregister():
-    bpy.utils.unregister_class(VIEW3D_PT_rig_tool)
-    bpy.utils.unregister_class(RIGTOOL_UL_parts_list)

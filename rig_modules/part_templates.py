@@ -62,6 +62,7 @@ def create_cylinder_part(context, rig_name, parent_bone_name="root", base_name="
     follow_bone.hide = True
     with context.temp_override(**override):
         bpy.ops.object.mode_set(mode='OBJECT')
+    context.view_layer.update()  # Let depsgraph register HIDE_follow_ before constraints reference it.
 
     context.view_layer.objects.active = ctrl_obj
     with context.temp_override(**override):

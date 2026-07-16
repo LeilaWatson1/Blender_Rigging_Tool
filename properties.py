@@ -139,7 +139,7 @@ def _on_current_rig_changed(self, context):
 
 
 # Defines the shape of a single item in the parts list: its name, parent, and indent depth.
-class RigPartItem(bpy.types.PropertyGroup):
+class PropRigPartItem(bpy.types.PropertyGroup):
     # name is built into PropertyGroup
     parent_name:     bpy.props.StringProperty()
     indent:          bpy.props.IntProperty(default=0)
@@ -362,18 +362,9 @@ class RigToolProperties(bpy.types.PropertyGroup):
                            items=[('X', 'X', ''), ('Y', 'Y', '')],
                            default='X',
                        )
-    parts:             bpy.props.CollectionProperty(type=RigPartItem)
+    parts:             bpy.props.CollectionProperty(type=PropRigPartItem)
     active_part_index: bpy.props.IntProperty(default=0, update=_on_part_selected)
     show_parts_list:   bpy.props.BoolProperty(name="Parts List", default=True)
     parent_selector:   bpy.props.StringProperty(name="Parent")
     rename_input:      bpy.props.StringProperty(name="")
 
-def register():
-    bpy.utils.register_class(RigPartItem)
-    bpy.utils.register_class(RigToolProperties)
-    bpy.types.Scene.rig_tool = bpy.props.PointerProperty(type=RigToolProperties)
-
-def unregister():
-    del bpy.types.Scene.rig_tool
-    bpy.utils.unregister_class(RigToolProperties)
-    bpy.utils.unregister_class(RigPartItem)
