@@ -4,7 +4,6 @@ from .rig_modules import create_base_rig, add_bone, add_bone_chain, create_revol
 
 # the Python functions behind your shelf buttons
 
-
 # Recomputes each part's indent depth from its parent, running multiple passes until no values change.
 def _recalculate_indents(props):
     changed = True
@@ -14,6 +13,7 @@ def _recalculate_indents(props):
         for part in props.parts:
             new_indent = indent_map.get(part.parent_name, -1) + 1
             if part.indent != new_indent:
+                print(part.name, part.parent_name, part.indent)
                 part.indent = new_indent
                 indent_map[part.name] = new_indent
                 changed = True
@@ -78,12 +78,16 @@ def _reparent_bones(context, bone_name, rig_name, new_parent):
         context.view_layer.objects.active = ctrl_obj
         with context.temp_override(**override):
             bpy.ops.object.mode_set(mode='EDIT')
-        ctrl_bone       = ctrl_obj.data.edit_bones.get(f"CTRL_{bone_name}")
-        new_ctrl_parent = ctrl_obj.data.edit_bones.get(f"CTRL_{new_parent}")
-        if ctrl_bone and new_ctrl_parent:
-            if new_ctrl_parent.parent == ctrl_bone:
-                new_ctrl_parent.parent = ctrl_bone.parent
-            ctrl_bone.parent = new_ctrl_parent
+        ctrl_bone = ctrl_obj.data.edit_bones.get(f"CTRL_{bone_name}")
+        if ctrl_bone:
+            if new_parent == "root":
+                ctrl_bone.parent = None
+            else:
+                new_ctrl_parent = ctrl_obj.data.edit_bones.get(f"CTRL_{new_parent}")
+                if new_ctrl_parent:
+                    if new_ctrl_parent.parent == ctrl_bone:
+                        new_ctrl_parent.parent = ctrl_bone.parent
+                    ctrl_bone.parent = new_ctrl_parent
         with context.temp_override(**override):
             bpy.ops.object.mode_set(mode='OBJECT')
 
@@ -315,14 +319,26 @@ class RIGTOOL_OT_move_part(bpy.types.Operator):
         # If above is a direct child of item, item should become a child of above (swap hierarchy).
         if new_parent == item.name:
             new_parent = above.name
-
         if item.parent_name != new_parent:
             # If new_parent was our direct child, update its parent in the parts list first to avoid a cycle.
             if above and above.name == new_parent and above.parent_name == item.name:
+                # DOWN swap: above was item's child, give it item's old parent.
                 above.parent_name = item.parent_name
+                # new_parent becomes the parent of all previous children of the moving part
+                for part in props.parts:
+                    if part.parent_name == item.name and part != item:
+                        part.parent_name = above.name
+            elif above is None and below and item.parent_name == below.name:
+                # UP swap to root: item was below's child, so below becomes item's child.
+                below.parent_name = item.name
+                for part in props.parts:
+                    if part.parent_name == below.name and part != item:
+                        part.parent_name = item.name
             item.parent_name = new_parent
             _recalculate_indents(props)
             _reparent_bones(context, item.name, props.current_rig, new_parent)
+            if above is None and below and below.parent_name == item.name:
+                _reparent_bones(context, below.name, props.current_rig, item.name)
             restore_mode(context, props.current_rig)
 
         return {'FINISHED'}
