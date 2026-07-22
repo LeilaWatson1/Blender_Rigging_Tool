@@ -1,10 +1,11 @@
 import bpy
 import math
-from .rig_modules import create_base_rig, add_bone, add_bone_chain, create_revolver_template, create_pistol_template, create_cylinder_part, update_rig_visibility, restore_mode, armatures_visible, pose_update, _get_view3d_override, _unique_name
+from .rig_modules import create_base_rig, add_bone, add_bone_chain, create_revolver_template, create_pistol_template, create_cylinder_part, create_bullet_feed, update_rig_visibility, restore_mode, armatures_visible, pose_update, _get_view3d_override, _unique_name
 
 # the Python functions behind your shelf buttons
 
 # Recomputes each part's indent depth from its parent, running multiple passes until no values change.
+# props: RigToolProperties instance containing the parts list to update.
 def _recalculate_indents(props):
     changed = True
     while changed:
@@ -20,6 +21,7 @@ def _recalculate_indents(props):
 
 
 # Reorders the parts list so every parent appears before its children, using a depth-first traversal.
+# props: RigToolProperties instance containing the parts list to reorder.
 def _sort_parts_by_hierarchy(props):
     children = {part.name: [] for part in props.parts}
     roots = []
@@ -43,6 +45,9 @@ def _sort_parts_by_hierarchy(props):
 
 
 # Returns "DEF_" or "SKT_" for a part's bone in the DEF armature (object mode safe).
+# bone_name: the part name (without prefix) to look up.
+# def_obj: the DEF_ armature object to search.
+# Returns: "SKT_" if the bone is a socket bone, otherwise "DEF_".
 def _get_def_prefix(bone_name, def_obj):
     for prefix in ("SKT_", "DEF_"):
         if def_obj.data.bones.get(f"{prefix}{bone_name}"):
@@ -53,6 +58,9 @@ def _get_def_prefix(bone_name, def_obj):
 
 # Reparents the DEF_, CTRL_, and TEMP_ bones for a part across all three armatures.
 # If new_parent is currently a child of bone_name the two are swapped first to avoid a cycle.
+# bone_name: the part name to reparent.
+# rig_name: the rig the part belongs to.
+# new_parent: the part name to use as the new parent, or "root".
 def _reparent_bones(context, bone_name, rig_name, new_parent):
     override = _get_view3d_override(context)
     armatures_visible(rig_name)
@@ -113,6 +121,9 @@ def _reparent_bones(context, bone_name, rig_name, new_parent):
 # Updates a part's parent, recalculates indents, sorts the list by hierarchy, and reparents bones.
 # If new_parent is a direct child of bone_name, it is moved up to bone_name's current parent first
 # to prevent a cycle in the parts list that would crash _sort_parts_by_hierarchy.
+# item: the PropRigPartItem to reparent.
+# rig_name: the rig the part belongs to.
+# new_parent: the part name to use as the new parent, or "root".
 def _set_parent(context, item, rig_name, new_parent):
     bone_name = item.name
     props = context.scene.rig_tool
@@ -130,12 +141,48 @@ def _set_parent(context, item, rig_name, new_parent):
 
 
 # Recursively removes all objects and sub-collections in a collection, then removes the collection itself.
+# collection: the Blender Collection to delete along with all its contents.
 def _delete_collection(collection):
     for obj in list(collection.objects):
         bpy.data.objects.remove(obj, do_unlink=True)
     for child in list(collection.children):
         _delete_collection(child)
     bpy.data.collections.remove(collection)
+
+
+# Deletes the current rig's collection and all its contents after user confirmation.
+# Scans all collections in the scene for rigs matching the tool's three-armature structure.
+class RIGTOOL_OT_find_rigs(bpy.types.Operator):
+    bl_idname     = "rig_tool.find_rigs"
+    bl_label      = "Find Rigs"
+    bl_description = "Find rigs in current scene. Must match the structure used by the tool."
+    bl_options    = {'REGISTER'}
+
+    def execute(self, context):
+        props = context.scene.rig_tool
+        found = []
+        for col in bpy.data.collections:
+            name      = col.name
+            obj_names = {obj.name for obj in col.objects}
+            if (f"DEF_{name}" in obj_names and
+                    f"CTRL_{name}" in obj_names and
+                    f"TEMPLATE_{name}" in obj_names):
+                def_obj      = bpy.data.objects.get(f"DEF_{name}")
+                ctrl_obj     = bpy.data.objects.get(f"CTRL_{name}")
+                template_obj = bpy.data.objects.get(f"TEMPLATE_{name}")
+                if (def_obj and ctrl_obj and template_obj and
+                        def_obj.type == 'ARMATURE' and
+                        ctrl_obj.type == 'ARMATURE' and
+                        template_obj.type == 'ARMATURE'):
+                    found.append(name)
+
+        if not found:
+            self.report({'WARNING'}, "No valid rigs found in scene.")
+            return {'FINISHED'}
+
+        props.current_rig = found[0]
+        self.report({'INFO'}, f"Found {len(found)} rig(s): {', '.join(found)}")
+        return {'FINISHED'}
 
 
 # Deletes the current rig's collection and all its contents after user confirmation.
@@ -202,6 +249,8 @@ class RIGTOOL_OT_create_part(bpy.types.Operator):
                            fk_ik=props.chain_fk_ik)
         elif props.selected_part_type == 'cylinder':
             create_cylinder_part(context, rig_name, parent_bone_name=parent, base_name=props.cylinder_name)
+        elif props.selected_part_type == 'bullet_feed':
+            create_bullet_feed(context, rig_name, props.bone_amount, props.curve_length)
         restore_mode(context, rig_name)
         return {'FINISHED'}
 
@@ -736,6 +785,7 @@ def _apply_widget_settings(context):
 
 
 classes = [
+    RIGTOOL_OT_find_rigs,
     RIGTOOL_OT_create_rig,
     RIGTOOL_OT_create_part,
     RIGTOOL_OT_set_mode,

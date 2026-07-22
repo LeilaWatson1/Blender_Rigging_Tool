@@ -7,6 +7,11 @@ from .part_templates import create_cylinder_part
 # Creates all bones for the revolver template: local, trigger, safety, cylinder_latch, cylinder,
 # and the hidden follow bone for cylinder rotation logic.
 # prefix is prepended to every bone name (e.g. "Cattleman" → DEF_Cattleman_trigger).
+# rig_name: the rig to build the template bones in.
+# prefix: string prepended to every bone name; empty string uses bare names.
+# grip_socket: True to add a grip attachment SKT_ bone.
+# ejector_socket: True to add an ejector attachment SKT_ bone.
+# flash_socket: True to add a flash-hider attachment SKT_ bone.
 def create_revolver_template(context, rig_name, prefix="", grip_socket=True, ejector_socket=True, flash_socket=True):
     p = f"{prefix}_" if prefix else ""
     create_base_rig(context, rig_name)
@@ -32,6 +37,11 @@ def create_revolver_template(context, rig_name, prefix="", grip_socket=True, eje
 
 # Creates all bones for the pistol template: local, trigger, mag, and slide.
 # prefix is prepended to every bone name (e.g. "Glock" → DEF_Glock_trigger).
+# rig_name: the rig to build the template bones in.
+# prefix: string prepended to every bone name; empty string uses bare names.
+# grip_socket: True to add a grip attachment SKT_ bone.
+# ejector_socket: True to add an ejector attachment SKT_ bone.
+# flash_socket: True to add a flash-hider attachment SKT_ bone.
 def create_pistol_template(context, rig_name, prefix="", grip_socket=True, ejector_socket=True, flash_socket=True):
     p = f"{prefix}_" if prefix else ""
     create_base_rig(context, rig_name)

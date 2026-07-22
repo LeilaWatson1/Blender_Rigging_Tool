@@ -9,5 +9,5 @@ from .build import (
     _unique_name,
     pose_update,
 )
-from .part_templates import create_cylinder_part, add_bone_chain, add_bone
+from .part_templates import create_cylinder_part, add_bone_chain, add_bone, create_bullet_feed
 from .templates import create_revolver_template, create_pistol_template

@@ -4,12 +4,21 @@ import math
 
 
 # Rotates a 2D point (x, y) by angle radians around the origin.
+# x: X component of the input point.
+# y: Y component of the input point.
+# angle: rotation in radians.
+# Returns: (rotated_x, rotated_y) tuple.
 def _rotate_2d(x, y, angle):
     c, s = math.cos(angle), math.sin(angle)
     return (c * x - s * y, s * x + c * y)
 
 
 # Maps a flat (x, y) coordinate onto a 3D axis plane (X, Y, or Z) and applies an offset.
+# x: 2D horizontal input coordinate.
+# y: 2D vertical input coordinate.
+# axis: 'X', 'Y', or 'Z' — which plane to project onto.
+# offset: (ox, oy, oz) translation applied after projection.
+# Returns: (x, y, z) 3D coordinate.
 def _apply_axis(x, y, axis, offset):
     ox, oy, oz = offset
     if axis == 'X':
@@ -21,6 +30,14 @@ def _apply_axis(x, y, axis, offset):
 
 
 # Creates a wire circle mesh object in the given collection, used as a bone custom shape.
+# name: the name for the new mesh and object.
+# collection: the Blender Collection to link the widget object into.
+# radius: radius of the circle.
+# vertices: number of vertices (segments) in the circle.
+# axis: 'X', 'Y', or 'Z' — the normal axis of the circle plane.
+# offset: (x, y, z) offset applied to all vertices.
+# shape_rotation: rotation (radians) applied to each vertex position before projection.
+# Returns: the created Blender Object with the wire circle mesh.
 def create_circle_widget(name, collection, radius=1.0, vertices=32, axis='Z', offset=(0.0, 0.0, 0.0), shape_rotation=0.0):
     mesh = bpy.data.meshes.new(name)
     bm = bmesh.new()
@@ -45,6 +62,13 @@ def create_circle_widget(name, collection, radius=1.0, vertices=32, axis='Z', of
 
 
 # Creates a wire arc with arrowheads at both ends, used as a bone custom shape for single-axis rotation controls.
+# name: the name for the new mesh and object.
+# collection: the Blender Collection to link the widget object into.
+# radius: radius of the arc.
+# axis: 'X', 'Y', or 'Z' — the normal axis of the arc plane.
+# offset: (x, y, z) offset applied to all vertices.
+# shape_rotation: rotation (radians) applied to each vertex position before projection.
+# Returns: the created Blender Object with the wire arc mesh.
 def create_arc_arrow_widget(name, collection, radius=1.0, axis='Z', offset=(0.0, 0.0, 0.0), shape_rotation=0.0):
     mesh = bpy.data.meshes.new(name)
     bm = bmesh.new()
@@ -100,6 +124,13 @@ def create_arc_arrow_widget(name, collection, radius=1.0, axis='Z', offset=(0.0,
 
 
 # Creates a wire circle with four outward arrows, used as a bone custom shape for multi-directional controls like root.
+# name: the name for the new mesh and object.
+# collection: the Blender Collection to link the widget object into.
+# radius: radius of the circle.
+# axis: 'X', 'Y', or 'Z' — the normal axis of the circle plane.
+# offset: (x, y, z) offset applied to all vertices.
+# shape_rotation: rotation (radians) applied to each vertex position before projection.
+# Returns: the created Blender Object with the wire circle-and-arrows mesh.
 def create_circle_arrow_widget(name, collection, radius=1.0, axis='Z', offset=(0.0, 0.0, 0.0), shape_rotation=0.0):
     mesh = bpy.data.meshes.new(name)
     bm = bmesh.new()
@@ -155,6 +186,13 @@ def create_circle_arrow_widget(name, collection, radius=1.0, axis='Z', offset=(0
 
 
 # Creates a straight line with arrowheads at both ends, used as a bone custom shape for linear slide controls.
+# name: the name for the new mesh and object.
+# collection: the Blender Collection to link the widget object into.
+# length: total length of the arrow line.
+# axis: 'X', 'Y', or 'Z' — the axis the arrow lies along.
+# offset: (x, y, z) offset applied to all vertices.
+# shape_rotation: rotation (radians) applied to each vertex position before projection.
+# Returns: the created Blender Object with the wire double-arrow mesh.
 def create_double_arrow_widget(name, collection, length=0.1, axis='Z', offset=(0.0, 0.0, 0.0), shape_rotation=0.0):
     mesh = bpy.data.meshes.new(name)
     bm = bmesh.new()

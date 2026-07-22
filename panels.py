@@ -25,7 +25,9 @@ class VIEW3D_PT_rig_tool(bpy.types.Panel):
 
         split = layout.split(factor=0.30)
         split.label(text="Current Rig")
-        split.prop(props, "current_rig", text="")
+        row = split.row(align=True)
+        row.prop(props, "current_rig", text="")
+        row.operator("rig_tool.find_rigs", text="Find Rigs")
 
         split = layout.split(factor=0.30)
         split.label(text="Visibility")
@@ -144,7 +146,7 @@ class VIEW3D_PT_rig_tool(bpy.types.Panel):
                 inner.prop(props, "socket_widget", text="Widget")
             elif props.selected_part_type == 'bone_chain':
                 split = inner.split(factor=0.50)
-                split.label(text="Bone Name")
+                split.label(text="Chain Name")
                 split.prop(props, "chain_name", text="")
                 row = inner.row()
                 row.prop(props, "chain_is_deforming")
@@ -160,6 +162,14 @@ class VIEW3D_PT_rig_tool(bpy.types.Panel):
                 split = inner.split(factor=0.50)
                 split.label(text="Name")
                 split.prop(props, "cylinder_name", text="")
+            elif props.selected_part_type == 'bullet_feed':
+                split = inner.split(factor=0.50)
+                split.label(text="Chain Name")
+                split.prop(props, "chain_name", text="")
+                row = inner.row()
+                row.prop(props, "bone_amount")
+                row = inner.row()
+                row.prop(props, "curve_length")
             box.operator("rig_tool.create_part", text="Create")
 
         row = layout.row()

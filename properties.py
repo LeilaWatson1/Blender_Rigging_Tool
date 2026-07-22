@@ -25,6 +25,7 @@ def _on_show_edit_widget_changed(self, context):
 
 
 # Builds the enum items list from all DEF_ armatures present in the scene.
+# Returns: list of (identifier, name, description) tuples for the EnumProperty.
 def _get_rig_items(self, context):
     global _rig_enum_cache
     _rig_enum_cache = []
@@ -267,7 +268,8 @@ class RigToolProperties(bpy.types.PropertyGroup):
             ('single_bone', "Single Bone", "A DEF/CTRL bone pair"),
             ('socket_bone', "Socket Bone", "A non-deforming bone in the export skeleton for use as an attachment socket"),
             ('bone_chain',  "Bone Chain",  "A chain of connected bones along the forward axis"),
-            ('cylinder',    "Cylinder",    "A multi-bone cylinder part"),
+            ('cylinder',    "Cylinder",    "A multi-bone cylinder part",),
+            ('bullet_feed',    "Bullet Feed",    "A chain of bones that loop along a curve.",),
         ],
         default='single_bone',
     )
@@ -337,6 +339,16 @@ class RigToolProperties(bpy.types.PropertyGroup):
             ('POSE', "Pose Mode", ""),
         ],
         default='OBJECT',
+    )
+    bone_amount: bpy.props.IntProperty(
+        name="Bone Amount",
+        default=8,
+        min=2,
+    )
+    curve_length: bpy.props.FloatProperty(
+        name="Curve Length",
+        default=2,
+        min=0.0001,
     )
     show_parts:        bpy.props.BoolProperty(name="Parts", default=False)
     show_export:       bpy.props.BoolProperty(name="Export", default=False)

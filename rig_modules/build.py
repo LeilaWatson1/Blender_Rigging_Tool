@@ -5,6 +5,10 @@ from .widgets import create_circle_widget, create_arc_arrow_widget, create_circl
 
 
 # Returns a unique name by checking existing rigs (name_type='rig') or parts (name_type='part'), appending _001, _002 etc. if needed.
+# name_type: 'rig' checks DEF_ scene objects; 'part' checks props.parts.
+# name: the base name to make unique.
+# props: RigToolProperties instance, required when name_type is 'part'.
+# Returns: unique string name with numeric suffix if the base name was already taken.
 def _unique_name(name_type, name, props=None):
     if name_type == 'rig':
         existing = {obj.name[4:] for obj in bpy.data.objects if obj.name.startswith("DEF_")}
@@ -20,6 +24,10 @@ def _unique_name(name_type, name, props=None):
 
 # Walks up the parts hierarchy to find the nearest ancestor that has a CTRL_ bone.
 # Chain parts resolve to their last CTRL_FK bone (or CTRL_IK for IK-only chains).
+# ctrl_obj: the CTRL_ armature object to search for bones.
+# parent_bone_name: part name of the desired parent, or "root".
+# props: RigToolProperties instance containing the parts hierarchy.
+# Returns: the nearest ancestor EditBone with a CTRL_ prefix, or the root EditBone.
 def _find_ctrl_parent(ctrl_obj, parent_bone_name, props):
     name = parent_bone_name
     while name and name != "root":
@@ -41,6 +49,10 @@ def _find_ctrl_parent(ctrl_obj, parent_bone_name, props):
 
 # Resolves the DEF parent edit bone for a given parent_bone_name, handling chain parts.
 # Must be called while def_obj is in EDIT mode.
+# def_obj: the DEF_ armature object to search for edit bones.
+# parent_bone_name: part name of the desired parent, or "root".
+# props: RigToolProperties instance containing the parts hierarchy.
+# Returns: the matching DEF_ or SKT_ EditBone, or the root EditBone if not found.
 def _resolve_def_parent(def_obj, parent_bone_name, props):
     part = next((p for p in props.parts if p.name == parent_bone_name), None)
     if part and part.is_fk_ik_chain:
@@ -57,6 +69,10 @@ def _resolve_def_parent(def_obj, parent_bone_name, props):
 
 
 # Appends a new entry to the parts list in the UI and moves it to sit directly under its parent.
+# part_name: the name for the new part.
+# parent_name: the name of the parent part, or "" for root-level.
+# is_socket: True if this part is an SKT_ socket bone.
+# Returns: the newly created PropRigPartItem.
 def _add_part(context, part_name, parent_name="", is_socket=False):
     props = context.scene.rig_tool
     indent     = 0
@@ -86,12 +102,16 @@ def _add_part(context, part_name, parent_name="", is_socket=False):
 
 
 # Rotates a coordinate tuple +90° around Z when front_axis is 'Y', converting X-native to Y-native.
+# coord: (x, y, z) tuple in X-native space.
+# front_axis: 'X' returns coord unchanged; 'Y' rotates it +90° around Z.
+# Returns: (x, y, z) tuple adjusted for the given front axis.
 def _apply_front_axis(coord, front_axis):
     x, y, z = coord
     return (-y, x, z) if front_axis == 'Y' else coord
 
 
 # Returns a context override dict for the active VIEW_3D window, required by bpy.ops calls from the N-panel.
+# Returns: dict with 'window', 'area', and 'region' keys, or {} if no VIEW_3D is found.
 def _get_view3d_override(context):
     for window in context.window_manager.windows:
         for area in window.screen.areas:
@@ -103,6 +123,7 @@ def _get_view3d_override(context):
 
 
 # Sets all three armatures visible and unhides HIDE_ bones so they can be edited.
+# rig_name: the rig name used to look up DEF_, CTRL_, and TEMPLATE_ objects.
 def armatures_visible(rig_name):
     for prefix in ("DEF_", "CTRL_", "TEMPLATE_"):
         obj = bpy.data.objects.get(f"{prefix}{rig_name}")
@@ -116,6 +137,7 @@ def armatures_visible(rig_name):
 
 
 # Shows or hides armatures based on the current mode, and re-hides HIDE_ bones in Pose Mode.
+# rig_name: the rig name used to look up DEF_, CTRL_, and TEMPLATE_ objects.
 def update_rig_visibility(context, rig_name):
     mode         = context.scene.rig_tool.mode
     def_obj      = bpy.data.objects.get(f"DEF_{rig_name}")
@@ -135,6 +157,7 @@ def update_rig_visibility(context, rig_name):
 
 
 # Puts Blender back into the correct edit mode for the current tool mode after an operation finishes.
+# rig_name: the rig name used to look up the TEMPLATE_ or CTRL_ object.
 def restore_mode(context, rig_name):
     mode     = context.scene.rig_tool.mode
     override = _get_view3d_override(context)
@@ -155,6 +178,14 @@ def restore_mode(context, rig_name):
 
 # Creates a TEMP_ bone in the template armature at the given position, with optional parent/child linking.
 # bone_color sets a custom pose bone color (RGB tuple); None leaves the bone at the armature default.
+# rig_name: the rig whose TEMPLATE_ armature receives the new bone.
+# bone_name: the bone name without the TEMP_ prefix.
+# parent_bone: name of the parent template bone (without TEMP_ prefix), or None.
+# child_bone: name of a child template bone to re-parent under the new bone, or None.
+# bone_head: world-space head position (x, y, z).
+# bone_tail: world-space tail position (x, y, z).
+# bone_color: RGB tuple for the bone colour; None for armature default.
+# use_connect: True to connect the new bone's head to its parent's tail.
 def add_template(context, rig_name, bone_name, parent_bone=None, child_bone=None, bone_head=(0.0, 0.0, 0.0), bone_tail=(0.0, 0.1, 0.0), bone_color=None, use_connect=False):
     template_obj = bpy.data.objects.get(f"TEMPLATE_{rig_name}")
     if not template_obj:
@@ -196,6 +227,8 @@ def add_template(context, rig_name, bone_name, parent_bone=None, child_bone=None
 # Creates the DEF/CTRL/TEMPLATE armatures, root bones, widget collection, and root Copy Transforms constraint.
 # Returns early with existing objects if the rig collection already exists.
 # Root bone orientation follows front_axis from scene properties.
+# rig_name: the name for the new rig; used to name all armatures, collections, and widgets.
+# Returns: tuple of (def_obj, ctrl_obj, template_obj) Blender Object references.
 def create_base_rig(context, rig_name):
     if rig_name in bpy.data.collections:
         return (
@@ -277,6 +310,23 @@ def create_base_rig(context, rig_name):
 
 # Creates DEF_ and/or CTRL_ bones for a named part, sets up the widget, assigns the Copy Transforms
 # constraint linking DEF to CTRL, registers the part in the UI list, and returns the actual name used.
+# rig_name: the rig to add the bone to.
+# bone_name: the part name (prefix is added automatically).
+# is_deforming: True to create a DEF_ bone in the export armature.
+# has_control: True to create a CTRL_ bone and widget in the control armature.
+# parent_bone_name: parent part name or "root".
+# ctrl_radius: radius (or length) of the widget shape.
+# ctrl_axis: axis the widget shape lies on ('X', 'Y', or 'Z').
+# bone_head: head position in X-native space (front_axis is applied automatically).
+# bone_tail: tail position in X-native space (front_axis is applied automatically).
+# ctrl_offset: XYZ offset applied to the widget mesh relative to the bone pivot.
+# widget_type: shape to use ('circle', 'arc_arrow', 'circle_arrow', or 'double_arrow').
+# ctrl_shape_rotation: extra rotation (radians) applied to the widget mesh in its plane.
+# ctrl_color: RGB tuple for the bone's custom colour.
+# ctrl_widget_rotation_z: additional Z rotation (radians) applied to the widget verts around the offset.
+# bone_prefix: prefix for the DEF_ armature bone; 'DEF' for deforming, 'SKT' for socket bones.
+# use_connect: True to connect the new bone's head to its parent's tail.
+# Returns: the actual bone name used (may differ from bone_name if a duplicate existed).
 def create_bone(context, rig_name, bone_name, is_deforming, has_control, parent_bone_name="root", ctrl_radius=0.5, ctrl_axis='Z', bone_head=(0.0, 0.0, 0.0), bone_tail=(0.1, 0.0, 0.0), ctrl_offset=(0.0, 0.0, 0.0), widget_type='circle', ctrl_shape_rotation=0.0, ctrl_color=(0.8, 0.0, 0.0), ctrl_widget_rotation_z=0.0, bone_prefix="DEF", use_connect=False):
     def_obj, ctrl_obj, template_obj = create_base_rig(context, rig_name)
     override = _get_view3d_override(context)
@@ -369,6 +419,13 @@ def create_bone(context, rig_name, bone_name, is_deforming, has_control, parent_
 
 # Creates a chain of connected edit bones, returning the last bone created.
 # use_connect is False for the first bone (free head) and True for all subsequent bones (head-to-tail).
+# ebs: the edit_bones collection of the armature being modified.
+# bone_names: list of part names for the chain; the prefix is prepended to each.
+# prefix: string prepended to each bone name (e.g. "DEF" or "CTRL_FK").
+# bone_parent: the EditBone to use as parent for the first bone in the chain.
+# bone_len: length of each bone in Blender units.
+# front_axis: 'X' or 'Y' axis for bone placement direction.
+# Returns: the last EditBone created in the chain.
 def _add_chain_edit_bones(ebs, bone_names, prefix, bone_parent, bone_len, front_axis):
     par = bone_parent
     for i, name in enumerate(bone_names):
@@ -382,6 +439,14 @@ def _add_chain_edit_bones(ebs, bone_names, prefix, bone_parent, bone_len, front_
 
 
 # Creates a single named edit bone with explicit world-space head/tail positions.
+# ebs: the edit_bones collection of the armature being modified.
+# name: the full bone name including prefix.
+# head_pos: (x, y, z) head position in X-native space (front_axis is applied).
+# tail_pos: (x, y, z) tail position in X-native space (front_axis is applied).
+# parent: the EditBone to parent this bone to.
+# front_axis: 'X' or 'Y' axis used to rotate positions into the correct orientation.
+# use_connect: True to connect the head to the parent's tail.
+# Returns: the newly created EditBone.
 def _add_single_edit_bone(ebs, name, head_pos, tail_pos, parent, front_axis, use_connect=False):
     eb             = ebs.new(name)
     eb.head        = _apply_front_axis(head_pos, front_axis)
@@ -392,6 +457,9 @@ def _add_single_edit_bone(ebs, name, head_pos, tail_pos, parent, front_axis, use
 
 
 # Applies widget, rotation mode, and custom color to a pose bone.
+# pb: the PoseBone to configure.
+# widget: the Object to use as the bone's custom shape.
+# color: RGB tuple for normal, select, and active bone colours.
 def _apply_ctrl_pose(pb, widget, color):
     pb.custom_shape               = widget
     pb.use_custom_shape_bone_size = False
@@ -404,6 +472,14 @@ def _apply_ctrl_pose(pb, widget, color):
 
 # Creates a bone chain rig along the forward axis. fk_ik controls which control systems are built:
 # 'FK' — FK controls only, 'IK' — IK controls only, 'BOTH' — blendable FK/IK with a slider bone.
+# rig_name: the rig to add the chain to.
+# base_name: root name for all chain bones; individual bones are named base_name_001, _002, etc.
+# is_deforming: True to create DEF_ bones in the export armature.
+# has_control: True to create CTRL_ bones and widgets in the control armature.
+# chain_length: number of bones in the chain.
+# parent_bone_name: parent part name or "root".
+# widget_type: shape for FK control widgets ('circle', 'arc_arrow', etc.).
+# fk_ik: which control systems to build, as described above.
 def create_bone_chain(context, rig_name, base_name, is_deforming, has_control,
                       chain_length=2, parent_bone_name="root", widget_type='circle', fk_ik='BOTH'):
     def_obj, ctrl_obj, template_obj = create_base_rig(context, rig_name)
