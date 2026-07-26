@@ -94,7 +94,9 @@ def _reparent_bones(context, bone_name, rig_name, new_parent):
                 new_ctrl_parent = ctrl_obj.data.edit_bones.get(f"CTRL_{new_parent}")
                 if new_ctrl_parent:
                     if new_ctrl_parent.parent == ctrl_bone:
-                        new_ctrl_parent.parent = ctrl_bone.parent
+                        # HIDE_follow bones must not have their parent swapped; skip if ctrl_bone's current parent is one.
+                        if not (ctrl_bone.parent and ctrl_bone.parent.name.startswith("HIDE_")):
+                            new_ctrl_parent.parent = ctrl_bone.parent
                     ctrl_bone.parent = new_ctrl_parent
         with context.temp_override(**override):
             bpy.ops.object.mode_set(mode='OBJECT')
@@ -369,9 +371,14 @@ class RIGTOOL_OT_move_part(bpy.types.Operator):
         if new_parent == item.name:
             new_parent = above.name
         if item.parent_name != new_parent:
+            down_swap_children = []
+            up_swap_children = []
+
             # If new_parent was our direct child, update its parent in the parts list first to avoid a cycle.
             if above and above.name == new_parent and above.parent_name == item.name:
                 # DOWN swap: above was item's child, give it item's old parent.
+                # Capture siblings before modifying parent_names so we know which bones to reparent.
+                down_swap_children = [p.name for p in props.parts if p.parent_name == item.name and p != item and p != above]
                 above.parent_name = item.parent_name
                 # new_parent becomes the parent of all previous children of the moving part
                 for part in props.parts:
@@ -379,6 +386,8 @@ class RIGTOOL_OT_move_part(bpy.types.Operator):
                         part.parent_name = above.name
             elif above is None and below and item.parent_name == below.name:
                 # UP swap to root: item was below's child, so below becomes item's child.
+                # Capture siblings before modifying parent_names so we know which bones to reparent.
+                up_swap_children = [p.name for p in props.parts if p.parent_name == below.name and p != item]
                 below.parent_name = item.name
                 for part in props.parts:
                     if part.parent_name == below.name and part != item:
@@ -388,6 +397,10 @@ class RIGTOOL_OT_move_part(bpy.types.Operator):
             _reparent_bones(context, item.name, props.current_rig, new_parent)
             if above is None and below and below.parent_name == item.name:
                 _reparent_bones(context, below.name, props.current_rig, item.name)
+            for child_name in down_swap_children:
+                _reparent_bones(context, child_name, props.current_rig, above.name)
+            for child_name in up_swap_children:
+                _reparent_bones(context, child_name, props.current_rig, item.name)
             restore_mode(context, props.current_rig)
 
         return {'FINISHED'}

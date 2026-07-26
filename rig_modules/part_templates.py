@@ -62,7 +62,7 @@ def create_cylinder_part(context, rig_name, parent_bone_name="root", base_name="
     follow_bone = ctrl_obj.data.edit_bones.new(f"HIDE_follow_{cyl_name}")
     follow_bone.head = ax((0.1, 0.0, 0.2))
     follow_bone.tail = ax((0.2, 0.0, 0.2))
-    follow_bone.parent = ctrl_obj.data.edit_bones[f"CTRL_{latch_name}"]
+    follow_bone.parent = ctrl_obj.data.edit_bones[f"CTRL_{cyl_name}"]
     follow_bone.use_connect = False
     follow_bone.hide = True
     with context.temp_override(**override):
