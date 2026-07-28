@@ -44,7 +44,7 @@ def _find_ctrl_parent(ctrl_obj, parent_bone_name, props):
             if follow_bones:
                 return follow_bones[-1]
         name = part.parent_name if part else "root"
-    return ctrl_obj.data.edit_bones.get("root")
+    return ctrl_obj.data.edit_bones.get("CTRL_root")
 
 
 # Resolves the DEF parent edit bone for a given parent_bone_name, handling chain parts.
@@ -187,6 +187,8 @@ def restore_mode(context, rig_name):
 # bone_color: RGB tuple for the bone colour; None for armature default.
 # use_connect: True to connect the new bone's head to its parent's tail.
 def add_template(context, rig_name, bone_name, parent_bone=None, child_bone=None, bone_head=(0.0, 0.0, 0.0), bone_tail=(0.0, 0.1, 0.0), bone_color=None, use_connect=False):
+    if bone_name.startswith("HIDE_"):
+        return
     template_obj = bpy.data.objects.get(f"TEMPLATE_{rig_name}")
     if not template_obj:
         return
@@ -751,5 +753,16 @@ def pose_update(context, rig_name):
                 part_name = def_bone_name[4:]  # strip "DEF_"
                 if part_name in template_data:
                     edit_bone.roll = template_data[part_name][2]
+
+        # SKT pass: socket bones have no COPY_TRANSFORMS, so apply template data directly.
+        for edit_bone in def_obj.data.edit_bones:
+            if not edit_bone.name.startswith("SKT_"):
+                continue
+            part_name = edit_bone.name[4:]  # strip "SKT_"
+            if part_name in template_data:
+                head, tail, roll = template_data[part_name]
+                edit_bone.head = def_inv @ (template_obj.matrix_world @ head)
+                edit_bone.tail = def_inv @ (template_obj.matrix_world @ tail)
+                edit_bone.roll = roll
         with context.temp_override(**override):
             bpy.ops.object.mode_set(mode='OBJECT')

@@ -62,7 +62,7 @@ def create_cylinder_part(context, rig_name, parent_bone_name="root", base_name="
     follow_bone = ctrl_obj.data.edit_bones.new(f"HIDE_follow_{cyl_name}")
     follow_bone.head = ax((0.1, 0.0, 0.2))
     follow_bone.tail = ax((0.2, 0.0, 0.2))
-    follow_bone.parent = ctrl_obj.data.edit_bones[f"CTRL_{cyl_name}"]
+    follow_bone.parent = ctrl_obj.data.edit_bones[f"CTRL_{latch_name}"]
     follow_bone.use_connect = False
     follow_bone.hide = True
     with context.temp_override(**override):
@@ -76,15 +76,15 @@ def create_cylinder_part(context, rig_name, parent_bone_name="root", base_name="
     copy_rot = follow_pose.constraints.new('COPY_ROTATION')
     copy_rot.target = ctrl_obj
     copy_rot.subtarget = f"CTRL_{cyl_name}"
-    copy_rot.use_x = False
+    copy_rot.use_x = True
     copy_rot.use_y = True
-    copy_rot.use_z = False
+    copy_rot.use_z = True
     ctrl_obj.pose.bones[f"CTRL_{cyl_name}"].cylinder_props.part_name = cyl_name
     with context.temp_override(**override):
         bpy.ops.object.mode_set(mode='OBJECT')
 
     add_template(context, rig_name, f"follow_{cyl_name}", parent_bone=latch_name,
-                bone_head=ax((0.1, 0.0, 0.2)), bone_tail=ax((0.2, 0.0, 0.2)))
+                 bone_head=ax((0.1, 0.0, 0.2)), bone_tail=ax((0.2, 0.0, 0.2)))
 
     update_rig_visibility(context, rig_name)
     return cyl_name

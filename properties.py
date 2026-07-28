@@ -44,16 +44,52 @@ def _on_scale_on_export_changed(self, context):
     context.scene.unit_settings.scale_length = 0.01 if self.scale_on_export else 1.0
 
 
-# Triggers _apply_widget_settings whenever any Widgets panel field changes.
-# Skipped while _load_widget_settings is bulk-setting the fields to avoid a re-entrant apply loop.
-def _on_widget_edit_changed(self, context):
+# Shared guard check used by all widget edit callbacks.
+def _widget_guard(self):
     from .operators import _widget_load_guard
-    if _widget_load_guard[0]:
+    return _widget_load_guard[0] or not self.current_rig or self.current_rig == 'NONE'
+
+# Rebuilds the widget mesh with only the widget type changed.
+def _on_widget_type_changed(self, context):
+    if _widget_guard(self):
         return
-    if not self.current_rig or self.current_rig == 'NONE':
+    from .operators import _apply_widget_mesh
+    _apply_widget_mesh(context, wtype=self.edit_widget)
+
+# Rebuilds the widget mesh with only the axis changed.
+def _on_widget_axis_changed(self, context):
+    if _widget_guard(self):
         return
-    from .operators import _apply_widget_settings
-    _apply_widget_settings(context)
+    from .operators import _apply_widget_mesh
+    _apply_widget_mesh(context, axis=self.edit_ctrl_axis)
+
+# Rebuilds the widget mesh with only the offset changed.
+def _on_widget_offset_changed(self, context):
+    if _widget_guard(self):
+        return
+    from .operators import _apply_widget_mesh
+    _apply_widget_mesh(context, offset=(self.edit_ctrl_offset_x, self.edit_ctrl_offset_y, self.edit_ctrl_offset_z))
+
+# Rebuilds the widget mesh with only the shape rotation changed.
+def _on_widget_rotation_changed(self, context):
+    if _widget_guard(self):
+        return
+    from .operators import _apply_widget_mesh
+    _apply_widget_mesh(context, shape_rotation=self.edit_shape_rotation)
+
+# Rebuilds the widget mesh with only the radius changed.
+def _on_widget_radius_changed(self, context):
+    if _widget_guard(self):
+        return
+    from .operators import _apply_widget_mesh
+    _apply_widget_mesh(context, ctrl_radius=self.edit_ctrl_radius)
+
+# Updates only the bone color without rebuilding the widget mesh.
+def _on_widget_color_changed(self, context):
+    if _widget_guard(self):
+        return
+    from .operators import _apply_widget_color
+    _apply_widget_color(context)
 
 
 # Shows or hides the collection for the current rig.
@@ -192,19 +228,19 @@ class RigToolProperties(bpy.types.PropertyGroup):
             ('double_arrow', "Double Arrow", ""),
         ],
         default='circle',
-        update=_on_widget_edit_changed,
+        update=_on_widget_type_changed,
     )
-    edit_ctrl_offset_x:  bpy.props.FloatProperty(name="X", default=0.0, update=_on_widget_edit_changed)
-    edit_ctrl_offset_y:  bpy.props.FloatProperty(name="Y", default=0.0, update=_on_widget_edit_changed)
-    edit_ctrl_offset_z:  bpy.props.FloatProperty(name="Z", default=0.0, update=_on_widget_edit_changed)
+    edit_ctrl_offset_x:  bpy.props.FloatProperty(name="X", default=0.0, update=_on_widget_offset_changed)
+    edit_ctrl_offset_y:  bpy.props.FloatProperty(name="Y", default=0.0, update=_on_widget_offset_changed)
+    edit_ctrl_offset_z:  bpy.props.FloatProperty(name="Z", default=0.0, update=_on_widget_offset_changed)
     edit_ctrl_axis:      bpy.props.EnumProperty(
         name="Ctrl Axis",
         items=[('X', 'X', ''), ('Y', 'Y', ''), ('Z', 'Z', '')],
         default='X',
-        update=_on_widget_edit_changed,
+        update=_on_widget_axis_changed,
     )
-    edit_shape_rotation: bpy.props.FloatProperty(name="Shape Rotation", default=0.0, update=_on_widget_edit_changed)
-    edit_ctrl_radius:    bpy.props.FloatProperty(name="Scale", default=0.1, min=0.001, update=_on_widget_edit_changed)
+    edit_shape_rotation: bpy.props.FloatProperty(name="Shape Rotation", default=0.0, update=_on_widget_rotation_changed)
+    edit_ctrl_radius:    bpy.props.FloatProperty(name="Scale", default=0.1, min=0.001, update=_on_widget_radius_changed)
     edit_ctrl_color:     bpy.props.EnumProperty(
         name="Ctrl Color",
         items=[
@@ -217,7 +253,7 @@ class RigToolProperties(bpy.types.PropertyGroup):
             ('WHITE',  "White",  ""),
         ],
         default='RED',
-        update=_on_widget_edit_changed,
+        update=_on_widget_color_changed,
     )
     show_current_rig: bpy.props.BoolProperty(
         name="Current Rig",

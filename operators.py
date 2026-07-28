@@ -89,7 +89,7 @@ def _reparent_bones(context, bone_name, rig_name, new_parent):
         ctrl_bone = ctrl_obj.data.edit_bones.get(f"CTRL_{bone_name}")
         if ctrl_bone:
             if new_parent == "root":
-                ctrl_bone.parent = None
+                ctrl_bone.parent = ctrl_obj.data.edit_bones.get("CTRL_root")
             else:
                 new_ctrl_parent = ctrl_obj.data.edit_bones.get(f"CTRL_{new_parent}")
                 if new_ctrl_parent:
@@ -98,6 +98,9 @@ def _reparent_bones(context, bone_name, rig_name, new_parent):
                         if not (ctrl_bone.parent and ctrl_bone.parent.name.startswith("HIDE_")):
                             new_ctrl_parent.parent = ctrl_bone.parent
                     ctrl_bone.parent = new_ctrl_parent
+            follow_bone = ctrl_obj.data.edit_bones.get(f"HIDE_follow_{bone_name}")
+            if follow_bone:
+                follow_bone.parent = ctrl_bone.parent
         with context.temp_override(**override):
             bpy.ops.object.mode_set(mode='OBJECT')
 
@@ -720,9 +723,10 @@ _WIDGET_COLOR_MAP = {
 }
 
 
-# Applies all Widgets panel values to the selected bone's control widget, positions, and color.
-# Called automatically by property update callbacks whenever any edit field changes.
-def _apply_widget_settings(context):
+# Rebuilds the widget mesh for the active pose bone, reading base settings from stored
+# metadata and applying only the provided overrides.
+# Accepts keyword overrides: wtype, axis, offset, shape_rotation, ctrl_radius.
+def _apply_widget_mesh(context, **overrides):
     from .rig_modules.widgets import (
         create_circle_widget, create_arc_arrow_widget,
         create_circle_arrow_widget, create_double_arrow_widget,
@@ -737,53 +741,88 @@ def _apply_widget_settings(context):
 
     ctrl_bone_name = active_bone.name
     bone_suffix    = active_bone.name[5:]
-
-    offset         = (props.edit_ctrl_offset_x, props.edit_ctrl_offset_y, props.edit_ctrl_offset_z)
-    shape_rotation = props.edit_shape_rotation
-    ctrl_color     = _WIDGET_COLOR_MAP[props.edit_ctrl_color]
     override       = _get_view3d_override(context)
     armatures_visible(rig_name)
 
     ctrl_obj       = bpy.data.objects.get(f"CTRL_{rig_name}")
     wgt_collection = bpy.data.collections.get(f"WGTS_{rig_name}")
-
-    if not ctrl_obj:
+    if not ctrl_obj or not wgt_collection:
         update_rig_visibility(context, rig_name)
         restore_mode(context, rig_name)
         return
 
-    wgt_name    = f"WGT_{rig_name}_{bone_suffix}"
-    old_wgt     = bpy.data.objects.get(wgt_name)
-    ctrl_radius = props.edit_ctrl_radius
+    wgt_name     = f"WGT_{rig_name}_{bone_suffix}"
+    old_wgt      = bpy.data.objects.get(wgt_name)
+    stored_color = [0.8, 0.0, 0.0]
 
-    # Replace widget mesh with new settings.
-    if wgt_collection:
-        if old_wgt:
-            bpy.data.objects.remove(old_wgt, do_unlink=True)
-        axis  = props.edit_ctrl_axis
-        wtype = props.edit_widget
-        if wtype == 'arc_arrow':
-            new_wgt = create_arc_arrow_widget(wgt_name, wgt_collection, radius=ctrl_radius, axis=axis, offset=offset, shape_rotation=shape_rotation)
-        elif wtype == 'circle_arrow':
-            new_wgt = create_circle_arrow_widget(wgt_name, wgt_collection, radius=ctrl_radius, axis=axis, offset=offset, shape_rotation=shape_rotation)
-        elif wtype == 'double_arrow':
-            new_wgt = create_double_arrow_widget(wgt_name, wgt_collection, length=ctrl_radius, axis=axis, offset=offset, shape_rotation=shape_rotation)
-        else:
-            new_wgt = create_circle_widget(wgt_name, wgt_collection, radius=ctrl_radius, axis=axis, offset=offset, shape_rotation=shape_rotation)
+    if old_wgt:
+        wtype          = overrides.get('wtype',          old_wgt.get("widget_type",    "circle"))
+        axis           = overrides.get('axis',           old_wgt.get("ctrl_axis",      "Z"))
+        offset         = overrides.get('offset',    tuple(old_wgt.get("ctrl_offset",   [0.0, 0.0, 0.0])))
+        shape_rotation = overrides.get('shape_rotation', float(old_wgt.get("shape_rotation", 0.0)))
+        ctrl_radius    = overrides.get('ctrl_radius',    float(old_wgt.get("ctrl_radius",    0.1)))
+        stored_color   = list(old_wgt.get("ctrl_color", [0.8, 0.0, 0.0]))
+        bpy.data.objects.remove(old_wgt, do_unlink=True)
+    else:
+        wtype          = overrides.get('wtype',          'circle')
+        axis           = overrides.get('axis',           'Z')
+        offset         = overrides.get('offset',         (0.0, 0.0, 0.0))
+        shape_rotation = overrides.get('shape_rotation', 0.0)
+        ctrl_radius    = overrides.get('ctrl_radius',    0.1)
 
-        new_wgt["widget_type"]    = wtype
-        new_wgt["ctrl_axis"]      = axis
-        new_wgt["ctrl_offset"]    = list(offset)
-        new_wgt["shape_rotation"] = shape_rotation
-        new_wgt["ctrl_color"]     = list(ctrl_color)
-        new_wgt["ctrl_radius"]    = ctrl_radius
+    if wtype == 'arc_arrow':
+        new_wgt = create_arc_arrow_widget(wgt_name, wgt_collection, radius=ctrl_radius, axis=axis, offset=offset, shape_rotation=shape_rotation)
+    elif wtype == 'circle_arrow':
+        new_wgt = create_circle_arrow_widget(wgt_name, wgt_collection, radius=ctrl_radius, axis=axis, offset=offset, shape_rotation=shape_rotation)
+    elif wtype == 'double_arrow':
+        new_wgt = create_double_arrow_widget(wgt_name, wgt_collection, length=ctrl_radius, axis=axis, offset=offset, shape_rotation=shape_rotation)
+    else:
+        new_wgt = create_circle_widget(wgt_name, wgt_collection, radius=ctrl_radius, axis=axis, offset=offset, shape_rotation=shape_rotation)
 
+    new_wgt["widget_type"]    = wtype
+    new_wgt["ctrl_axis"]      = axis
+    new_wgt["ctrl_offset"]    = list(offset)
+    new_wgt["shape_rotation"] = shape_rotation
+    new_wgt["ctrl_color"]     = stored_color
+    new_wgt["ctrl_radius"]    = ctrl_radius
+
+    context.view_layer.objects.active = ctrl_obj
+    with context.temp_override(**override):
+        bpy.ops.object.mode_set(mode='POSE')
+    if ctrl_bone_name in ctrl_obj.pose.bones:
+        ctrl_obj.pose.bones[ctrl_bone_name].custom_shape = new_wgt
+    with context.temp_override(**override):
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+    update_rig_visibility(context, rig_name)
+    restore_mode(context, rig_name)
+
+
+# Updates only the bone color and stored ctrl_color metadata without rebuilding the widget mesh.
+def _apply_widget_color(context):
+    props    = context.scene.rig_tool
+    rig_name = props.current_rig
+    if not rig_name or rig_name == 'NONE':
+        return
+    active_bone = context.active_pose_bone
+    if not active_bone or not active_bone.name.startswith("CTRL_"):
+        return
+
+    ctrl_color = _WIDGET_COLOR_MAP[props.edit_ctrl_color]
+    ctrl_obj   = bpy.data.objects.get(f"CTRL_{rig_name}")
+    override   = _get_view3d_override(context)
+    armatures_visible(rig_name)
+
+    wgt = bpy.data.objects.get(f"WGT_{rig_name}_{active_bone.name[5:]}")
+    if wgt:
+        wgt["ctrl_color"] = list(ctrl_color)
+
+    if ctrl_obj:
         context.view_layer.objects.active = ctrl_obj
         with context.temp_override(**override):
             bpy.ops.object.mode_set(mode='POSE')
-        if ctrl_bone_name in ctrl_obj.pose.bones:
-            pb = ctrl_obj.pose.bones[ctrl_bone_name]
-            pb.custom_shape = new_wgt
+        pb = ctrl_obj.pose.bones.get(active_bone.name)
+        if pb:
             pb.color.palette = 'CUSTOM'
             pb.color.custom.normal = ctrl_color
             pb.color.custom.select = tuple(min(1.0, c + 0.4) for c in ctrl_color)

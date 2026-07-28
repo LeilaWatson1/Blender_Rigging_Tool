@@ -24,20 +24,8 @@ def _on_rotate_to_round_update(self, context):
     if not follow_bone or not ctrl_bone:
         return
 
-    axis = None
-    for c in follow_bone.constraints:
-        if c.type == 'COPY_ROTATION':
-            if c.use_x:   axis = 0
-            elif c.use_y: axis = 1
-            elif c.use_z: axis = 2
-            break
-    if axis is None:
-        return
-
-    angle    = (int(self.rotate_to_round) - 1) / self.capacity * (2 * math.pi)
-    axis_map = [(1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)]
-    quat     = mathutils.Quaternion(axis_map[axis], angle)
-    ctrl_bone.rotation_quaternion = quat
+    angle = (int(self.rotate_to_round) - 1) / self.capacity * (2 * math.pi)
+    ctrl_bone.rotation_quaternion = mathutils.Quaternion((0.0, 1.0, 0.0), angle)
 
 
 # Clamps rotate_to_round to the new capacity if it was lowered below the current selection.
