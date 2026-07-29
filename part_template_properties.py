@@ -14,8 +14,7 @@ def _get_rotate_items(self, context):
 def _on_rotate_to_round_update(self, context):
     if not self.rotate_to_round or not self.part_name:
         return
-    props    = context.scene.rig_tool
-    ctrl_obj = bpy.data.objects.get(f"CTRL_{props.rig_name}")
+    ctrl_obj = bpy.data.objects.get(f"CTRL_{self.rig_name}")
     if not ctrl_obj:
         return
 
@@ -38,6 +37,7 @@ def _on_capacity_update(self, context):
 # Holds the cylinder's animation properties, registered on PoseBone so they are keyframeable.
 class CylinderBoneProps(bpy.types.PropertyGroup):
     part_name: bpy.props.StringProperty()
+    rig_name:  bpy.props.StringProperty()
     capacity: bpy.props.IntProperty(
         name="Capacity",
         default=6,

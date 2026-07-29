@@ -80,6 +80,7 @@ def create_cylinder_part(context, rig_name, parent_bone_name="root", base_name="
     copy_rot.use_y = True
     copy_rot.use_z = True
     ctrl_obj.pose.bones[f"CTRL_{cyl_name}"].cylinder_props.part_name = cyl_name
+    ctrl_obj.pose.bones[f"CTRL_{cyl_name}"].cylinder_props.rig_name  = rig_name
     with context.temp_override(**override):
         bpy.ops.object.mode_set(mode='OBJECT')
 
