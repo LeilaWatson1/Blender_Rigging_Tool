@@ -113,7 +113,13 @@ class VIEW3D_PT_rig_tool(bpy.types.Panel):
             box = layout.box()
             box.prop(props, "selected_template", text="")
             inner = box.box()
-            if props.selected_template == 'revolver' or props.selected_template == 'pistol':
+            if props.selected_template == 'revolver':
+                split = inner.split(factor=0.50)
+                split.label(text="Name Prefix")
+                split.prop(props, "template_prefix", text="")
+                inner.prop(props, "template_grip_socket")
+                inner.prop(props, "template_flash_socket")
+            elif props.selected_template == 'pistol':
                 split = inner.split(factor=0.50)
                 split.label(text="Name Prefix")
                 split.prop(props, "template_prefix", text="")
@@ -171,6 +177,14 @@ class VIEW3D_PT_rig_tool(bpy.types.Panel):
                 row = inner.row()
                 row.prop(props, "curve_length")
             box.operator("rig_tool.create_part", text="Create")
+
+        row = layout.row()
+        row.prop(props, "show_weights",
+                 icon='TRIA_DOWN' if props.show_weights else 'TRIA_RIGHT',
+                 emboss=False)
+        if props.show_weights:
+            box = layout.box()
+            box.operator("rig_tool.weight_selected")
 
         row = layout.row()
         row.prop(props, "show_export",

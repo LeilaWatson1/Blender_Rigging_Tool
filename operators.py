@@ -277,7 +277,7 @@ class RIGTOOL_OT_create_template(bpy.types.Operator):
         ejector_socket = props.template_ejector_socket
         flash_socket   = props.template_flash_socket
         if props.selected_template == 'revolver':
-            create_revolver_template(context, rig_name, prefix=prefix, grip_socket=grip_socket, ejector_socket=ejector_socket, flash_socket=flash_socket)
+            create_revolver_template(context, rig_name, prefix=prefix, grip_socket=grip_socket, flash_socket=flash_socket)
         elif props.selected_template == 'pistol':
             create_pistol_template(context, rig_name, prefix=prefix, grip_socket=grip_socket, ejector_socket=ejector_socket, flash_socket=flash_socket)
         restore_mode(context, rig_name)
@@ -836,6 +836,49 @@ def _apply_widget_color(context):
 
 
 
+# Weights each selected mesh to its matching DEF_ bone by name, replacing all vertex groups.
+# Reports a warning for any mesh with no matching DEF_ bone and skips it.
+class RIGTOOL_OT_weight_selected(bpy.types.Operator):
+    bl_idname  = "rig_tool.weight_selected"
+    bl_label   = "Weight Selected Hardsurface Models"
+    bl_description = "Weight selected models to current rig. Models must have identical names to the parts they will be weighted to or they will be skipped."
+
+    def execute(self, context):
+        props    = context.scene.rig_tool
+        rig_name = props.current_rig
+        if not rig_name or rig_name == 'NONE':
+            self.report({'WARNING'}, "No rig selected.")
+            return {'CANCELLED'}
+
+        def_obj = bpy.data.objects.get(f"DEF_{rig_name}")
+        if not def_obj:
+            self.report({'WARNING'}, f"DEF_{rig_name} not found.")
+            return {'CANCELLED'}
+
+        meshes = [obj for obj in context.selected_objects if obj.type == 'MESH']
+        if not meshes:
+            self.report({'WARNING'}, "No mesh objects selected.")
+            return {'CANCELLED'}
+
+        no_match = []
+        for obj in meshes:
+            obj.vertex_groups.clear()
+            target = f"DEF_{obj.name}"
+            if target not in def_obj.data.bones:
+                no_match.append(obj.name)
+                continue
+            arm_mod = next((m for m in obj.modifiers if m.type == 'ARMATURE' and m.object == def_obj), None)
+            if arm_mod is None:
+                arm_mod = obj.modifiers.new(name="Armature", type='ARMATURE')
+                arm_mod.object = def_obj
+            vg = obj.vertex_groups.new(name=target)
+            vg.add([v.index for v in obj.data.vertices], 1.0, 'REPLACE')
+
+        if no_match:
+            self.report({'WARNING'}, f"No matching part found, vertex groups cleared: {', '.join(no_match)}")
+        return {'FINISHED'}
+
+
 classes = [
     RIGTOOL_OT_find_rigs,
     RIGTOOL_OT_create_rig,
@@ -849,5 +892,6 @@ classes = [
     RIGTOOL_OT_rename_part,
     RIGTOOL_OT_create_template,
     RIGTOOL_OT_delete_rig,
+    RIGTOOL_OT_weight_selected,
 ]
 

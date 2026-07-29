@@ -387,6 +387,7 @@ class RigToolProperties(bpy.types.PropertyGroup):
         min=0.0001,
     )
     show_parts:        bpy.props.BoolProperty(name="Parts", default=False)
+    show_weights:      bpy.props.BoolProperty(name="Weights", default=False)
     show_export:       bpy.props.BoolProperty(name="Export", default=False)
     export_engine:     bpy.props.EnumProperty(
                            name="Engine",
